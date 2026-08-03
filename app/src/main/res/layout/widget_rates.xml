@@ -47,8 +47,8 @@
         android:paddingStart="14dp"
         android:paddingEnd="14dp">
 
-        <TextView style="@style/WidgetRowLabel" android:text="DOLAR / TL" />
-        <TextView android:id="@+id/widget_usd" style="@style/WidgetRowValue" />
+        <TextView style="@style/WidgetDollarRowLabel" android:text="DOLAR / TL" />
+        <TextView android:id="@+id/widget_usd" style="@style/WidgetDollarRowValue" />
     </LinearLayout>
 
     <LinearLayout
@@ -62,8 +62,8 @@
         android:paddingStart="14dp"
         android:paddingEnd="14dp">
 
-        <TextView style="@style/WidgetRowLabel" android:text="EURO / TL" />
-        <TextView android:id="@+id/widget_eur" style="@style/WidgetRowValue" />
+        <TextView style="@style/WidgetEuroRowLabel" android:text="EURO / TL" />
+        <TextView android:id="@+id/widget_eur" style="@style/WidgetEuroRowValue" />
     </LinearLayout>
 
     <LinearLayout

@@ -8,6 +8,10 @@
     <color name="ink">#14201C</color>
     <color name="muted">#68736F</color>
     <color name="primary">#1C594A</color>
+    <color name="dollar_green">#18864B</color>
+    <color name="dollar_green_light">#79D69A</color>
+    <color name="euro_blue">#1769AA</color>
+    <color name="euro_blue_light">#8BC4FF</color>
     <color name="white">#FFFFFF</color>
     <color name="widget_white">#F7FFF9</color>
     <color name="widget_mint">#D2F36B</color>

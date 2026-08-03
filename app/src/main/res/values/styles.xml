@@ -12,6 +12,8 @@
         <item name="android:textColor">@color/widget_mint</item><item name="android:textSize">22sp</item>
         <item name="android:textStyle">bold</item>
     </style>
+    <style name="DollarBadge" parent="RateBadge"><item name="android:textColor">@color/dollar_green_light</item></style>
+    <style name="EuroBadge" parent="RateBadge"><item name="android:textColor">@color/euro_blue_light</item></style>
     <style name="GoldBadge" parent="RateBadge"><item name="android:textColor">#FFD96A</item></style>
     <style name="RateContent">
         <item name="android:layout_width">0dp</item><item name="android:layout_height">wrap_content</item>
@@ -22,17 +24,23 @@
         <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
         <item name="android:textColor">@color/muted</item><item name="android:textSize">13sp</item>
     </style>
+    <style name="DollarLabel" parent="RateLabel"><item name="android:textColor">@color/dollar_green</item></style>
+    <style name="EuroLabel" parent="RateLabel"><item name="android:textColor">@color/euro_blue</item></style>
     <style name="RateValue">
         <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginTop">4dp</item><item name="android:text">—</item>
         <item name="android:textColor">@color/ink</item><item name="android:textSize">25sp</item>
         <item name="android:textStyle">bold</item>
     </style>
+    <style name="DollarValue" parent="RateValue"><item name="android:textColor">@color/dollar_green</item></style>
+    <style name="EuroValue" parent="RateValue"><item name="android:textColor">@color/euro_blue</item></style>
     <style name="WidgetRowLabel">
         <item name="android:layout_width">0dp</item><item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item><item name="android:textColor">@color/widget_muted</item>
         <item name="android:textSize">15sp</item><item name="android:textStyle">bold</item>
     </style>
+    <style name="WidgetDollarRowLabel" parent="WidgetRowLabel"><item name="android:textColor">@color/dollar_green_light</item></style>
+    <style name="WidgetEuroRowLabel" parent="WidgetRowLabel"><item name="android:textColor">@color/euro_blue_light</item></style>
     <style name="WidgetGoldRowLabel" parent="WidgetRowLabel">
         <item name="android:textColor">#F6D36C</item>
     </style>
@@ -41,4 +49,6 @@
         <item name="android:textColor">@color/widget_white</item><item name="android:textSize">27sp</item>
         <item name="android:textStyle">bold</item>
     </style>
+    <style name="WidgetDollarRowValue" parent="WidgetRowValue"><item name="android:textColor">@color/dollar_green_light</item></style>
+    <style name="WidgetEuroRowValue" parent="WidgetRowValue"><item name="android:textColor">@color/euro_blue_light</item></style>
 </resources>
