@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">KurCep</string>
+    <string name="subtitle">Döviz ve altın, tek bakışta.</string>
+    <string name="usd_try">Dolar / Türk Lirası</string>
+    <string name="eur_try">Euro / Türk Lirası</string>
+    <string name="gram_gold">Gram Altın (24 ayar)</string>
+    <string name="lira_value">₺%1$s</string>
+    <string name="last_updated">Son güncelleme %1$s • Döviz: ExchangeRate-API</string>
+    <string name="widget_updated">%1$s • ExchangeRate-API</string>
+    <string name="updating">Güncelleniyor…</string>
+    <string name="no_data">Henüz veri yok</string>
+    <string name="update_failed">Güncelleme başarısız. İnternet bağlantını kontrol et.</string>
+    <string name="refresh">Kurları güncelle</string>
+    <string name="widget_hint">Ana ekrana basılı tutup “Widget’lar” menüsünden KurCep’i ekleyebilirsin.</string>
+    <string name="widget_title">KurCep • Piyasalar</string>
+    <string name="tap_to_refresh">Yenilemek için ↻ simgesine dokun</string>
+    <string name="widget_description">Dolar, euro ve gram altın fiyatlarını gösterir</string>
+</resources>

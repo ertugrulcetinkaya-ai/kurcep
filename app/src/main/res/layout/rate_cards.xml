@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="32dp"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="92dp"
+        android:background="@drawable/bg_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="18dp">
+        <TextView style="@style/RateBadge" android:text="$" />
+        <LinearLayout style="@style/RateContent">
+            <TextView style="@style/RateLabel" android:text="@string/usd_try" />
+            <TextView android:id="@+id/usd_value" style="@style/RateValue" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="92dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="18dp">
+        <TextView style="@style/RateBadge" android:text="€" />
+        <LinearLayout style="@style/RateContent">
+            <TextView style="@style/RateLabel" android:text="@string/eur_try" />
+            <TextView android:id="@+id/eur_value" style="@style/RateValue" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="92dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_gold_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="18dp">
+        <TextView style="@style/GoldBadge" android:text="Au" />
+        <LinearLayout style="@style/RateContent">
+            <TextView style="@style/RateLabel" android:text="@string/gram_gold" />
+            <TextView android:id="@+id/gold_value" style="@style/RateValue" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

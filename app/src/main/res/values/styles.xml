@@ -1,0 +1,44 @@
+<resources>
+    <style name="Theme.KurCep" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/primary</item>
+        <item name="android:navigationBarColor">@color/background</item>
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+    <style name="RateBadge">
+        <item name="android:layout_width">52dp</item><item name="android:layout_height">52dp</item>
+        <item name="android:background">@drawable/bg_widget</item><item name="android:gravity">center</item>
+        <item name="android:textColor">@color/widget_mint</item><item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="GoldBadge" parent="RateBadge"><item name="android:textColor">#FFD96A</item></style>
+    <style name="RateContent">
+        <item name="android:layout_width">0dp</item><item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item><item name="android:layout_marginStart">16dp</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+    <style name="RateLabel">
+        <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/muted</item><item name="android:textSize">13sp</item>
+    </style>
+    <style name="RateValue">
+        <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">4dp</item><item name="android:text">—</item>
+        <item name="android:textColor">@color/ink</item><item name="android:textSize">25sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="WidgetRowLabel">
+        <item name="android:layout_width">0dp</item><item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item><item name="android:textColor">@color/widget_muted</item>
+        <item name="android:textSize">15sp</item><item name="android:textStyle">bold</item>
+    </style>
+    <style name="WidgetGoldRowLabel" parent="WidgetRowLabel">
+        <item name="android:textColor">#F6D36C</item>
+    </style>
+    <style name="WidgetRowValue">
+        <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/widget_white</item><item name="android:textSize">27sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>
