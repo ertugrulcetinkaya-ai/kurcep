@@ -20,4 +20,4 @@ The `release` build enables R8 shrinking and resource shrinking. A production-si
 
 For a signed release, provide the Gradle properties `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` through a local untracked `~/.gradle/gradle.properties` file or CI secrets.
 
-The widget refreshes asynchronously after its broadcast is rendered, so slow network providers cannot hold an Android broadcast open. OEM battery optimization may still delay the system's 30-minute widget refresh interval.
+The widget renders cached data immediately and queues a unique, network-constrained WorkManager job for the refresh. This keeps the work recoverable if the app process is reclaimed while the APIs are running. OEM battery optimization may still delay the system's 30-minute widget refresh interval.

@@ -9,7 +9,10 @@ final class RateStore {
     private static final String PREFS = "rates";
 
     static void save(Context context, RateData data) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        save(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE), data);
+    }
+
+    static void save(SharedPreferences prefs, RateData data) {
         SharedPreferences.Editor editor = prefs.edit();
         if (prefs.contains("updated") && !sameDay(prefs.getLong("updated", 0), data.updatedAt)) {
             editor.putLong("previous_usd", prefs.getLong("usd", 0));
@@ -34,7 +37,10 @@ final class RateStore {
     }
 
     static RateData load(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        return load(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE));
+    }
+
+    static RateData load(SharedPreferences prefs) {
         if (!prefs.contains("updated")) return null;
         double usd = Double.longBitsToDouble(prefs.getLong("usd", 0));
         double eur = Double.longBitsToDouble(prefs.getLong("eur", 0));
