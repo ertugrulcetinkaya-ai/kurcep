@@ -49,6 +49,7 @@
 
         <TextView style="@style/WidgetDollarRowLabel" android:text="DOLAR / TL" />
         <TextView android:id="@+id/widget_usd" style="@style/WidgetDollarRowValue" />
+        <TextView android:id="@+id/widget_usd_change" style="@style/WidgetChange" />
     </LinearLayout>
 
     <LinearLayout
@@ -64,6 +65,7 @@
 
         <TextView style="@style/WidgetEuroRowLabel" android:text="EURO / TL" />
         <TextView android:id="@+id/widget_eur" style="@style/WidgetEuroRowValue" />
+        <TextView android:id="@+id/widget_eur_change" style="@style/WidgetChange" />
     </LinearLayout>
 
     <LinearLayout
@@ -79,6 +81,7 @@
 
         <TextView style="@style/WidgetGoldRowLabel" android:text="GRAM ALTIN" />
         <TextView android:id="@+id/widget_gold" style="@style/WidgetRowValue" />
+        <TextView android:id="@+id/widget_gold_change" style="@style/WidgetChange" />
     </LinearLayout>
 
     <TextView

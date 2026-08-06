@@ -34,6 +34,15 @@
     </style>
     <style name="DollarValue" parent="RateValue"><item name="android:textColor">@color/dollar_green</item></style>
     <style name="EuroValue" parent="RateValue"><item name="android:textColor">@color/euro_blue</item></style>
+    <style name="RateValueRow">
+        <item name="android:layout_width">match_parent</item><item name="android:layout_height">wrap_content</item>
+        <item name="android:gravity">center_vertical</item><item name="android:orientation">horizontal</item>
+    </style>
+    <style name="DailyChange">
+        <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">10dp</item><item name="android:textColor">@color/muted</item>
+        <item name="android:textSize">13sp</item><item name="android:textStyle">bold</item>
+    </style>
     <style name="WidgetRowLabel">
         <item name="android:layout_width">0dp</item><item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item><item name="android:textColor">@color/widget_muted</item>
@@ -51,4 +60,9 @@
     </style>
     <style name="WidgetDollarRowValue" parent="WidgetRowValue"><item name="android:textColor">@color/dollar_green_light</item></style>
     <style name="WidgetEuroRowValue" parent="WidgetRowValue"><item name="android:textColor">@color/euro_blue_light</item></style>
+    <style name="WidgetChange">
+        <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">6dp</item><item name="android:textColor">@color/widget_muted</item>
+        <item name="android:textSize">11sp</item><item name="android:textStyle">bold</item>
+    </style>
 </resources>

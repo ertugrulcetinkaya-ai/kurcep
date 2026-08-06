@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.graphics.Color;
 
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
@@ -18,6 +19,9 @@ public class MainActivity extends Activity {
     private TextView usdValue;
     private TextView eurValue;
     private TextView goldValue;
+    private TextView usdChange;
+    private TextView eurChange;
+    private TextView goldChange;
     private TextView updatedValue;
     private View refreshButton;
 
@@ -30,6 +34,9 @@ public class MainActivity extends Activity {
         usdValue = findViewById(R.id.usd_value);
         eurValue = findViewById(R.id.eur_value);
         goldValue = findViewById(R.id.gold_value);
+        usdChange = findViewById(R.id.usd_change);
+        eurChange = findViewById(R.id.eur_change);
+        goldChange = findViewById(R.id.gold_change);
         updatedValue = findViewById(R.id.updated_value);
         refreshButton = findViewById(R.id.refresh_button);
         refreshButton.setOnClickListener(v -> refresh());
@@ -68,8 +75,22 @@ public class MainActivity extends Activity {
         usdValue.setText(getString(R.string.lira_value, currency.format(data.usdTry)));
         eurValue.setText(getString(R.string.lira_value, currency.format(data.eurTry)));
         goldValue.setText(getString(R.string.lira_value, currency.format(data.gramGoldTry)));
+        showChange(usdChange, data.usdDailyChange);
+        showChange(eurChange, data.eurDailyChange);
+        showChange(goldChange, data.goldDailyChange);
         String time = new SimpleDateFormat("HH:mm", new Locale("tr", "TR"))
                 .format(new Date(data.updatedAt));
         updatedValue.setText(getString(R.string.last_updated, time));
+    }
+
+    private void showChange(TextView view, double change) {
+        if (Double.isNaN(change)) {
+            view.setText("—");
+            view.setTextColor(Color.GRAY);
+            return;
+        }
+        boolean up = change >= 0;
+        view.setText(getString(R.string.daily_change, up ? "↑" : "↓", currency.format(Math.abs(change))));
+        view.setTextColor(getColor(up ? R.color.change_up : R.color.change_down));
     }
 }

@@ -15,7 +15,10 @@
         <TextView style="@style/DollarBadge" android:text="$" />
         <LinearLayout style="@style/RateContent">
             <TextView style="@style/DollarLabel" android:text="@string/usd_try" />
-            <TextView android:id="@+id/usd_value" style="@style/DollarValue" />
+            <LinearLayout style="@style/RateValueRow">
+                <TextView android:id="@+id/usd_value" style="@style/DollarValue" />
+                <TextView android:id="@+id/usd_change" style="@style/DailyChange" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 
@@ -30,7 +33,10 @@
         <TextView style="@style/EuroBadge" android:text="€" />
         <LinearLayout style="@style/RateContent">
             <TextView style="@style/EuroLabel" android:text="@string/eur_try" />
-            <TextView android:id="@+id/eur_value" style="@style/EuroValue" />
+            <LinearLayout style="@style/RateValueRow">
+                <TextView android:id="@+id/eur_value" style="@style/EuroValue" />
+                <TextView android:id="@+id/eur_change" style="@style/DailyChange" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 
@@ -45,7 +51,10 @@
         <TextView style="@style/GoldBadge" android:text="Au" />
         <LinearLayout style="@style/RateContent">
             <TextView style="@style/RateLabel" android:text="@string/gram_gold" />
-            <TextView android:id="@+id/gold_value" style="@style/RateValue" />
+            <LinearLayout style="@style/RateValueRow">
+                <TextView android:id="@+id/gold_value" style="@style/RateValue" />
+                <TextView android:id="@+id/gold_change" style="@style/DailyChange" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
