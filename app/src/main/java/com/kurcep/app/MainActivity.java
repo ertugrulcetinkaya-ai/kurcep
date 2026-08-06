@@ -3,11 +3,12 @@ package com.kurcep.app;
 import android.app.Activity;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowInsets;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.graphics.Color;
 
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
@@ -15,7 +16,7 @@ import java.util.Date;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private final NumberFormat currency = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
+    private final NumberFormat currency = Formatters.currency();
     private TextView usdValue;
     private TextView eurValue;
     private TextView goldValue;
@@ -29,8 +30,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        currency.setMinimumFractionDigits(2);
-        currency.setMaximumFractionDigits(2);
+        applySystemBarInsets();
         usdValue = findViewById(R.id.usd_value);
         eurValue = findViewById(R.id.eur_value);
         goldValue = findViewById(R.id.gold_value);
@@ -44,6 +44,38 @@ public class MainActivity extends Activity {
         RateData cached = RateStore.load(this);
         if (cached != null) show(cached);
         refresh();
+    }
+
+    private void applySystemBarInsets() {
+        View root = findViewById(R.id.main_root);
+        int baseLeft = root.getPaddingLeft();
+        int baseTop = root.getPaddingTop();
+        int baseRight = root.getPaddingRight();
+        int baseBottom = root.getPaddingBottom();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top;
+            int bottom;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.graphics.Insets systemBars = insets.getInsets(
+                        WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                top = systemBars.top;
+                bottom = systemBars.bottom;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(baseLeft, baseTop + top, baseRight, baseBottom + bottom);
+            return insets;
+        });
+        root.requestApplyInsets();
     }
 
     private void refresh() {
@@ -86,7 +118,7 @@ public class MainActivity extends Activity {
     private void showChange(TextView view, double change) {
         if (Double.isNaN(change)) {
             view.setText("—");
-            view.setTextColor(Color.GRAY);
+            view.setTextColor(getColor(R.color.muted));
             return;
         }
         boolean up = change >= 0;

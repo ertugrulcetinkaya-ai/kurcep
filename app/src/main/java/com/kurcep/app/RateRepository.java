@@ -2,9 +2,10 @@ package com.kurcep.app;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
-import org.json.JSONObject;
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -15,88 +16,109 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Locale;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 final class RateRepository {
+    private static final String TAG = "RateRepository";
+    private static final String FX_URL = "https://open.er-api.com/v6/latest/USD";
+    private static final String GOLD_URL = "https://api.gold-api.com/price/XAU";
+    private static final String GOLD_HISTORY_URL = "https://xaus.com/api/v1/history";
+    private static final double GRAMS_PER_TROY_OUNCE = 31.1034768;
+    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
     interface Callback {
         void onSuccess(RateData data);
         void onError(Exception error);
     }
 
     static void fetch(Callback callback) {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        Handler main = new Handler(Looper.getMainLooper());
-        executor.execute(() -> {
+        EXECUTOR.execute(() -> {
             try {
-                JSONObject fx = getJson("https://open.er-api.com/v6/latest/USD");
-                JSONObject rates = fx.getJSONObject("rates");
-                double usdTry = rates.getDouble("TRY");
-                double eurPerUsd = rates.getDouble("EUR");
+                // These requests are independent. Starting them together keeps a slow source
+                // from serially extending the fetch time.
+                Future<JSONObject> fxFuture = EXECUTOR.submit(() -> getJson(FX_URL));
+                Future<JSONObject> goldFuture = EXECUTOR.submit(() -> getJson(GOLD_URL));
 
-                JSONObject gold = getJson("https://api.gold-api.com/price/XAU");
-                double goldUsdPerOunce = gold.getDouble("price");
-                double eurTry = usdTry / eurPerUsd;
-                double gramGoldTry = goldUsdPerOunce * usdTry / 31.1034768;
-                double[] dailyChanges = fetchDailyChanges(usdTry, eurTry, goldUsdPerOunce,
-                        gramGoldTry);
+                JSONObject rates = fxFuture.get().getJSONObject("rates");
+                double usdTry = rates.getDouble("TRY");
+                double eurTry = usdTry / rates.getDouble("EUR");
+                double goldUsdPerOunce = goldFuture.get().getDouble("price");
+                double gramGoldTry = goldUsdPerOunce * usdTry / GRAMS_PER_TROY_OUNCE;
+
+                // Historical sources are optional and independent. A failure in one does not
+                // hide a valid daily change from another source.
+                Future<double[]> currencyChange = EXECUTOR.submit(
+                        () -> fetchCurrencyDailyChange(usdTry, eurTry));
+                Future<Double> goldChange = EXECUTOR.submit(
+                        () -> fetchGoldDailyChange(gramGoldTry));
+
+                double[] currencyChanges = currencyChange.get();
+                double dailyGoldChange = goldChange.get();
                 RateData result = new RateData(usdTry, eurTry, gramGoldTry,
-                        dailyChanges[0], dailyChanges[1], dailyChanges[2], System.currentTimeMillis());
-                main.post(() -> callback.onSuccess(result));
+                        currencyChanges[0], currencyChanges[1], dailyGoldChange,
+                        System.currentTimeMillis());
+                MAIN.post(() -> callback.onSuccess(result));
             } catch (Exception error) {
-                main.post(() -> callback.onError(error));
-            } finally {
-                executor.shutdown();
+                Log.e(TAG, "Güncel kurlar alınamadı", error);
+                MAIN.post(() -> callback.onError(asException(error)));
             }
         });
     }
 
-    private static double[] fetchDailyChanges(double usdTry, double eurTry,
-                                              double goldUsdPerOunce, double gramGoldTry) {
+    private static double[] fetchCurrencyDailyChange(double usdTry, double eurTry) {
         try {
-            Calendar yesterday = Calendar.getInstance();
-            yesterday.add(Calendar.DAY_OF_YEAR, -1);
-            String date = new SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    .format(yesterday.getTime());
+            String date = yesterday();
             JSONObject historical = getJson("https://api.frankfurter.app/" + date
                     + "?from=USD&to=TRY,EUR");
             JSONObject rates = historical.getJSONObject("rates");
             double previousUsdTry = rates.getDouble("TRY");
             double previousEurTry = previousUsdTry / rates.getDouble("EUR");
-            double previousGoldUsdPerOunce = fetchPreviousGoldClose();
-            double previousGoldTry = previousGoldUsdPerOunce * previousUsdTry / 31.1034768;
             return new double[]{
-                    percentChange(usdTry, previousUsdTry),
-                    percentChange(eurTry, previousEurTry),
-                    percentChange(gramGoldTry, previousGoldTry)
+                    RateMath.percentChange(usdTry, previousUsdTry),
+                    RateMath.percentChange(eurTry, previousEurTry)
             };
-        } catch (Exception ignored) {
-            return new double[]{Double.NaN, Double.NaN, Double.NaN};
+        } catch (Exception error) {
+            Log.w(TAG, "Döviz geçmiş verisi alınamadı", error);
+            return new double[]{Double.NaN, Double.NaN};
+        }
+    }
+
+    private static double fetchGoldDailyChange(double gramGoldTry) {
+        try {
+            JSONObject fx = getJson("https://api.frankfurter.app/" + yesterday()
+                    + "?from=USD&to=TRY");
+            double previousUsdTry = fx.getJSONObject("rates").getDouble("TRY");
+            double previousGoldUsdPerOunce = fetchPreviousGoldClose();
+            double previousGoldTry = previousGoldUsdPerOunce * previousUsdTry
+                    / GRAMS_PER_TROY_OUNCE;
+            return RateMath.percentChange(gramGoldTry, previousGoldTry);
+        } catch (Exception error) {
+            Log.w(TAG, "Altın geçmiş verisi alınamadı", error);
+            return Double.NaN;
         }
     }
 
     private static double fetchPreviousGoldClose() throws Exception {
-        JSONObject history = getJson("https://xaus.com/api/v1/history");
+        JSONObject history = getJson(GOLD_HISTORY_URL);
         JSONArray points = history.getJSONArray("points");
-        Calendar yesterday = Calendar.getInstance();
-        yesterday.add(Calendar.DAY_OF_YEAR, -1);
-        String yesterdayDate = new SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                .format(yesterday.getTime());
-        double fallback = Double.NaN;
+        String yesterday = yesterday();
         for (int i = points.length() - 1; i >= 0; i--) {
             JSONObject point = points.getJSONObject(i);
-            String date = point.getString("d");
-            if (date.compareTo(yesterdayDate) <= 0) {
+            if (point.getString("d").compareTo(yesterday) <= 0) {
                 return point.getDouble("c");
             }
-            fallback = point.getDouble("c");
         }
-        if (!Double.isNaN(fallback)) return fallback;
         throw new IllegalStateException("Altın geçmiş verisi yok");
     }
 
-    private static double percentChange(double current, double previous) {
-        return previous == 0 ? Double.NaN : ((current - previous) / previous) * 100;
+    private static String yesterday() {
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.DAY_OF_YEAR, -1);
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.getTime());
     }
 
     private static JSONObject getJson(String address) throws Exception {
@@ -123,6 +145,13 @@ final class RateRepository {
         } finally {
             connection.disconnect();
         }
+    }
+
+    private static Exception asException(Exception error) {
+        if (error instanceof ExecutionException && error.getCause() instanceof Exception) {
+            return (Exception) error.getCause();
+        }
+        return error;
     }
 
     private RateRepository() {}

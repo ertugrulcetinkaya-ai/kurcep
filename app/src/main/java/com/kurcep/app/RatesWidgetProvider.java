@@ -7,6 +7,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.RemoteViews;
 
 import java.text.NumberFormat;
@@ -15,6 +16,7 @@ import java.util.Date;
 import java.util.Locale;
 
 public class RatesWidgetProvider extends AppWidgetProvider {
+    private static final String TAG = "RatesWidgetProvider";
     private static final String ACTION_REFRESH = "com.kurcep.app.REFRESH_WIDGET";
 
     @Override
@@ -29,26 +31,26 @@ public class RatesWidgetProvider extends AppWidgetProvider {
                 ids = manager.getAppWidgetIds(new ComponentName(context, RatesWidgetProvider.class));
             }
             render(context, manager, ids, RateStore.load(context), true);
-            PendingResult pending = goAsync();
-            fetchAndUpdate(context, manager, ids, pending);
+            // Do not keep the broadcast open while remote APIs are contacted. Android can
+            // terminate a goAsync() broadcast after a short window, while network calls may
+            // legitimately take longer. The callback updates the widget when ready.
+            fetchAndUpdate(context, manager, ids);
         } else {
             super.onReceive(context, intent);
         }
     }
 
-    private static void fetchAndUpdate(Context context, AppWidgetManager manager, int[] ids,
-                                       PendingResult pending) {
+    private static void fetchAndUpdate(Context context, AppWidgetManager manager, int[] ids) {
         Context appContext = context.getApplicationContext();
         RateRepository.fetch(new RateRepository.Callback() {
             @Override public void onSuccess(RateData data) {
                 RateStore.save(appContext, data);
                 render(appContext, manager, ids, data, false);
-                pending.finish();
             }
 
             @Override public void onError(Exception error) {
+                Log.w(TAG, "Widget güncellemesi başarısız", error);
                 render(appContext, manager, ids, RateStore.load(appContext), false);
-                pending.finish();
             }
         });
     }
@@ -60,9 +62,7 @@ public class RatesWidgetProvider extends AppWidgetProvider {
 
     private static void render(Context context, AppWidgetManager manager, int[] ids,
                                RateData data, boolean loading) {
-        NumberFormat format = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
-        format.setMinimumFractionDigits(2);
-        format.setMaximumFractionDigits(2);
+        NumberFormat format = Formatters.currency();
         for (int id : ids) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_rates);
             if (data == null) {
@@ -107,9 +107,7 @@ public class RatesWidgetProvider extends AppWidgetProvider {
             return;
         }
         boolean up = change >= 0;
-        NumberFormat format = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
-        format.setMinimumFractionDigits(2);
-        format.setMaximumFractionDigits(2);
+        NumberFormat format = Formatters.currency();
         views.setTextViewText(viewId, (up ? "↑ " : "↓ ") + format.format(Math.abs(change)) + "%");
         views.setTextColor(viewId, context.getColor(up ? R.color.change_up : R.color.change_down));
     }

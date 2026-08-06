@@ -47,20 +47,15 @@ final class RateStore {
                 ? Double.longBitsToDouble(prefs.getLong("previous_gold", 0)) : Double.NaN;
         double dailyUsd = prefs.contains("daily_usd")
                 ? Double.longBitsToDouble(prefs.getLong("daily_usd", 0))
-                : percentChange(usd, previousUsd);
+                : RateMath.percentChange(usd, previousUsd);
         double dailyEur = prefs.contains("daily_eur")
                 ? Double.longBitsToDouble(prefs.getLong("daily_eur", 0))
-                : percentChange(eur, previousEur);
+                : RateMath.percentChange(eur, previousEur);
         double dailyGold = prefs.contains("daily_gold")
                 ? Double.longBitsToDouble(prefs.getLong("daily_gold", 0))
-                : percentChange(gold, previousGold);
+                : RateMath.percentChange(gold, previousGold);
         return new RateData(usd, eur, gold, dailyUsd, dailyEur, dailyGold,
                 prefs.getLong("updated", 0));
-    }
-
-    private static double percentChange(double current, double previous) {
-        return Double.isNaN(previous) || previous == 0 ? Double.NaN
-                : ((current - previous) / previous) * 100;
     }
 
     private static boolean sameDay(long first, long second) {
