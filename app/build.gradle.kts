@@ -18,7 +18,6 @@ android {
         applicationId = "com.kurcep.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
         versionCode = 2
         versionName = "1.2"
     }
