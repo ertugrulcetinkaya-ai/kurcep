@@ -27,6 +27,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        // Unit tests run on the JVM: Android classes (Looper, Handler, Log) return defaults
+        // instead of throwing so the repository code paths can execute without a device.
+        unitTests.isReturnDefaultValues = true
+    }
+
     signingConfigs {
         create("release") {
             if (hasReleaseSigning) {
@@ -56,4 +62,6 @@ android {
 dependencies {
     implementation("androidx.work:work-runtime:2.11.2")
     testImplementation("junit:junit:4.13.2")
+    // android.jar ships org.json stubs that cannot parse; local unit tests need the real library.
+    testImplementation("org.json:json:20240303")
 }

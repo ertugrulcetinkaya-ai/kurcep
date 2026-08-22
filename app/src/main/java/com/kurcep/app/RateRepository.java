@@ -23,12 +23,15 @@ import java.util.concurrent.Future;
 
 final class RateRepository {
     private static final String TAG = "RateRepository";
-    private static final String FX_URL = "https://open.er-api.com/v6/latest/USD";
-    private static final String GOLD_URL = "https://api.gold-api.com/price/XAU";
-    private static final String GOLD_HISTORY_URL = "https://xaus.com/api/v1/history";
-    private static final double GRAMS_PER_TROY_OUNCE = 31.1034768;
+    static final String FX_URL = "https://open.er-api.com/v6/latest/USD";
+    static final String GOLD_URL = "https://api.gold-api.com/price/XAU";
+    static final String GOLD_HISTORY_URL = "https://xaus.com/api/v1/history";
+    static final double GRAMS_PER_TROY_OUNCE = 31.1034768;
     private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
+    // Package-private so unit tests can replace it with a fake implementation.
+    static RateTransport transport = new HttpRateTransport();
 
     interface Callback {
         void onSuccess(RateData data);
@@ -38,35 +41,40 @@ final class RateRepository {
     static void fetch(Callback callback) {
         EXECUTOR.execute(() -> {
             try {
-                // These requests are independent. Starting them together keeps a slow source
-                // from serially extending the fetch time.
-                Future<JSONObject> fxFuture = EXECUTOR.submit(() -> getJson(FX_URL));
-                Future<JSONObject> goldFuture = EXECUTOR.submit(() -> getJson(GOLD_URL));
-
-                JSONObject rates = fxFuture.get().getJSONObject("rates");
-                double usdTry = rates.getDouble("TRY");
-                double eurTry = usdTry / rates.getDouble("EUR");
-                double goldUsdPerOunce = goldFuture.get().getDouble("price");
-                double gramGoldTry = goldUsdPerOunce * usdTry / GRAMS_PER_TROY_OUNCE;
-
-                // Historical sources are optional and independent. A failure in one does not
-                // hide a valid daily change from another source.
-                Future<double[]> currencyChange = EXECUTOR.submit(
-                        () -> fetchCurrencyDailyChange(usdTry, eurTry));
-                Future<Double> goldChange = EXECUTOR.submit(
-                        () -> fetchGoldDailyChange(gramGoldTry));
-
-                double[] currencyChanges = currencyChange.get();
-                double dailyGoldChange = goldChange.get();
-                RateData result = new RateData(usdTry, eurTry, gramGoldTry,
-                        currencyChanges[0], currencyChanges[1], dailyGoldChange,
-                        System.currentTimeMillis());
+                RateData result = loadRates();
                 MAIN.post(() -> callback.onSuccess(result));
             } catch (Exception error) {
                 Log.e(TAG, "Güncel kurlar alınamadı", error);
                 MAIN.post(() -> callback.onError(asException(error)));
             }
         });
+    }
+
+    // Package-private so unit tests can exercise the full computation with a fake transport.
+    static RateData loadRates() throws Exception {
+        // These requests are independent. Starting them together keeps a slow source
+        // from serially extending the fetch time.
+        Future<JSONObject> fxFuture = EXECUTOR.submit(() -> getJson(FX_URL));
+        Future<JSONObject> goldFuture = EXECUTOR.submit(() -> getJson(GOLD_URL));
+
+        JSONObject rates = fxFuture.get().getJSONObject("rates");
+        double usdTry = rates.getDouble("TRY");
+        double eurTry = usdTry / rates.getDouble("EUR");
+        double goldUsdPerOunce = goldFuture.get().getDouble("price");
+        double gramGoldTry = goldUsdPerOunce * usdTry / GRAMS_PER_TROY_OUNCE;
+
+        // Historical sources are optional and independent. A failure in one does not
+        // hide a valid daily change from another source.
+        Future<double[]> currencyChange = EXECUTOR.submit(
+                () -> fetchCurrencyDailyChange(usdTry, eurTry));
+        Future<Double> goldChange = EXECUTOR.submit(
+                () -> fetchGoldDailyChange(gramGoldTry));
+
+        double[] currencyChanges = currencyChange.get();
+        double dailyGoldChange = goldChange.get();
+        return new RateData(usdTry, eurTry, gramGoldTry,
+                currencyChanges[0], currencyChanges[1], dailyGoldChange,
+                System.currentTimeMillis());
     }
 
     private static double[] fetchCurrencyDailyChange(double usdTry, double eurTry) {
@@ -121,29 +129,41 @@ final class RateRepository {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.getTime());
     }
 
-    private static JSONObject getJson(String address) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
-        connection.setConnectTimeout(10_000);
-        connection.setReadTimeout(10_000);
-        connection.setRequestProperty("Accept", "application/json");
-        connection.setRequestProperty("User-Agent", "KurCep-Android/1.0");
-        try {
-            int status = connection.getResponseCode();
-            InputStream stream = status >= 200 && status < 300
-                    ? connection.getInputStream() : connection.getErrorStream();
-            if (stream == null) throw new IllegalStateException("Sunucu yanıt vermedi");
-            StringBuilder body = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) body.append(line);
+    static JSONObject getJson(String address) throws Exception {
+        RateTransport.Response response = transport.get(address);
+        if (response.status < 200 || response.status >= 300) {
+            throw new IllegalStateException("Sunucu hatası: " + response.status);
+        }
+        return new JSONObject(response.body);
+    }
+
+    /**
+     * Production transport: the same HttpURLConnection behavior the repository
+     * used before the transport seam was introduced.
+     */
+    private static final class HttpRateTransport implements RateTransport {
+        @Override
+        public RateTransport.Response get(String address) throws Exception {
+            HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
+            connection.setConnectTimeout(10_000);
+            connection.setReadTimeout(10_000);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("User-Agent", "KurCep-Android/1.0");
+            try {
+                int status = connection.getResponseCode();
+                InputStream stream = status >= 200 && status < 300
+                        ? connection.getInputStream() : connection.getErrorStream();
+                if (stream == null) throw new IllegalStateException("Sunucu yanıt vermedi");
+                StringBuilder body = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) body.append(line);
+                }
+                return new RateTransport.Response(status, body.toString());
+            } finally {
+                connection.disconnect();
             }
-            if (status < 200 || status >= 300) {
-                throw new IllegalStateException("Sunucu hatası: " + status);
-            }
-            return new JSONObject(body.toString());
-        } finally {
-            connection.disconnect();
         }
     }
 
