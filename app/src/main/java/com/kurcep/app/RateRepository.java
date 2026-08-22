@@ -26,6 +26,8 @@ final class RateRepository {
     static final String FX_URL = "https://open.er-api.com/v6/latest/USD";
     static final String GOLD_URL = "https://api.gold-api.com/price/XAU";
     static final String GOLD_HISTORY_URL = "https://xaus.com/api/v1/history";
+    static final String BRENT_URL =
+            "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F?range=5d&interval=1d";
     static final double GRAMS_PER_TROY_OUNCE = 31.1034768;
     private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -56,6 +58,7 @@ final class RateRepository {
         // from serially extending the fetch time.
         Future<JSONObject> fxFuture = EXECUTOR.submit(() -> getJson(FX_URL));
         Future<JSONObject> goldFuture = EXECUTOR.submit(() -> getJson(GOLD_URL));
+        Future<double[]> brentFuture = EXECUTOR.submit(RateRepository::fetchBrent);
 
         JSONObject rates = fxFuture.get().getJSONObject("rates");
         double usdTry = rates.getDouble("TRY");
@@ -72,8 +75,10 @@ final class RateRepository {
 
         double[] currencyChanges = currencyChange.get();
         double dailyGoldChange = goldChange.get();
+        double[] brent = brentFuture.get();
         return new RateData(usdTry, eurTry, gramGoldTry,
                 currencyChanges[0], currencyChanges[1], dailyGoldChange,
+                brent[0], brent[1],
                 System.currentTimeMillis());
     }
 
@@ -107,6 +112,42 @@ final class RateRepository {
         } catch (Exception error) {
             Log.w(TAG, "Altın geçmiş verisi alınamadı", error);
             return Double.NaN;
+        }
+    }
+
+    // Brent is independent of the FX and gold sources: a failure here only
+    // removes Brent (NaN), never the other prices.
+    private static double[] fetchBrent() {
+        try {
+            JSONObject result = getJson(BRENT_URL)
+                    .getJSONObject("chart").getJSONArray("result").getJSONObject(0);
+            double current = result.getJSONObject("meta").getDouble("regularMarketPrice");
+            JSONArray closes = result.getJSONObject("indicators")
+                    .getJSONArray("quote").getJSONObject(0).getJSONArray("close");
+            if (closes.length() < 2) {
+                throw new IllegalStateException("Brent geçmiş verisi yok");
+            }
+            // The last bar is the current session, so the previous bar's close is
+            // the last completed daily close. Yahoo may leave null entries there,
+            // so walk back to the nearest earlier valid close as the baseline.
+            double previous = Double.NaN;
+            for (int i = closes.length() - 2; i >= 0; i--) {
+                Object value = closes.opt(i);
+                if (value instanceof Number) {
+                    double candidate = ((Number) value).doubleValue();
+                    if (!Double.isNaN(candidate) && !Double.isInfinite(candidate)) {
+                        previous = candidate;
+                        break;
+                    }
+                }
+            }
+            if (Double.isNaN(previous)) {
+                return new double[]{Double.NaN, Double.NaN};
+            }
+            return new double[]{current, RateMath.percentChange(current, previous)};
+        } catch (Exception error) {
+            Log.w(TAG, "Brent verisi alınamadı", error);
+            return new double[]{Double.NaN, Double.NaN};
         }
     }
 

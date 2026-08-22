@@ -57,4 +57,22 @@
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="92dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="18dp">
+        <TextView style="@style/OilBadge" android:text="BR" />
+        <LinearLayout style="@style/RateContent">
+            <TextView style="@style/OilLabel" android:text="@string/brent_oil" />
+            <LinearLayout style="@style/RateValueRow">
+                <TextView android:id="@+id/brent_value" style="@style/OilValue" />
+                <TextView android:id="@+id/brent_change" style="@style/DailyChange" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
 </LinearLayout>

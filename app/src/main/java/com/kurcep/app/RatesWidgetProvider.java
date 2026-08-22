@@ -49,9 +49,11 @@ public class RatesWidgetProvider extends AppWidgetProvider {
                 views.setTextViewText(R.id.widget_usd, "—");
                 views.setTextViewText(R.id.widget_eur, "—");
                 views.setTextViewText(R.id.widget_gold, "—");
+                views.setTextViewText(R.id.widget_brent, "—");
                 views.setTextViewText(R.id.widget_usd_change, "—");
                 views.setTextViewText(R.id.widget_eur_change, "—");
                 views.setTextViewText(R.id.widget_gold_change, "—");
+                views.setTextViewText(R.id.widget_brent_change, "—");
                 views.setTextViewText(R.id.widget_updated, context.getString(
                         loading ? R.string.updating : R.string.tap_to_refresh));
             } else {
@@ -61,6 +63,9 @@ public class RatesWidgetProvider extends AppWidgetProvider {
                 setChange(views, R.id.widget_usd_change, data.usdDailyChange, context);
                 setChange(views, R.id.widget_eur_change, data.eurDailyChange, context);
                 setChange(views, R.id.widget_gold_change, data.goldDailyChange, context);
+                views.setTextViewText(R.id.widget_brent, Double.isNaN(data.brentUsd)
+                        ? "—" : "$" + format.format(data.brentUsd));
+                setChange(views, R.id.widget_brent_change, data.brentDailyChange, context);
                 String time = new SimpleDateFormat("HH:mm", new Locale("tr", "TR"))
                         .format(new Date(data.updatedAt));
                 views.setTextViewText(R.id.widget_updated, loading

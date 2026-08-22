@@ -20,9 +20,11 @@ public class MainActivity extends Activity {
     private TextView usdValue;
     private TextView eurValue;
     private TextView goldValue;
+    private TextView brentValue;
     private TextView usdChange;
     private TextView eurChange;
     private TextView goldChange;
+    private TextView brentChange;
     private TextView updatedValue;
     private View refreshButton;
 
@@ -37,6 +39,8 @@ public class MainActivity extends Activity {
         usdChange = findViewById(R.id.usd_change);
         eurChange = findViewById(R.id.eur_change);
         goldChange = findViewById(R.id.gold_change);
+        brentValue = findViewById(R.id.brent_value);
+        brentChange = findViewById(R.id.brent_change);
         updatedValue = findViewById(R.id.updated_value);
         refreshButton = findViewById(R.id.refresh_button);
         refreshButton.setOnClickListener(v -> refresh());
@@ -107,9 +111,12 @@ public class MainActivity extends Activity {
         usdValue.setText(getString(R.string.lira_value, currency.format(data.usdTry)));
         eurValue.setText(getString(R.string.lira_value, currency.format(data.eurTry)));
         goldValue.setText(getString(R.string.lira_value, currency.format(data.gramGoldTry)));
+        brentValue.setText(Double.isNaN(data.brentUsd) ? "—"
+                : getString(R.string.usd_value, currency.format(data.brentUsd)));
         showChange(usdChange, data.usdDailyChange);
         showChange(eurChange, data.eurDailyChange);
         showChange(goldChange, data.goldDailyChange);
+        showChange(brentChange, data.brentDailyChange);
         String time = new SimpleDateFormat("HH:mm", new Locale("tr", "TR"))
                 .format(new Date(data.updatedAt));
         updatedValue.setText(getString(R.string.last_updated, time));

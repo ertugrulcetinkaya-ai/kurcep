@@ -18,12 +18,14 @@ final class RateStore {
             editor.putLong("previous_usd", prefs.getLong("usd", 0));
             editor.putLong("previous_eur", prefs.getLong("eur", 0));
             editor.putLong("previous_gold", prefs.getLong("gold", 0));
+            editor.putLong("previous_brent", prefs.getLong("brent", 0));
             editor.putLong("previous_updated", prefs.getLong("updated", 0));
         }
         editor
                 .putLong("usd", Double.doubleToRawLongBits(data.usdTry))
                 .putLong("eur", Double.doubleToRawLongBits(data.eurTry))
                 .putLong("gold", Double.doubleToRawLongBits(data.gramGoldTry))
+                .putLong("brent", Double.doubleToRawLongBits(data.brentUsd))
                 .putLong("updated", data.updatedAt)
                 .apply();
         if (!Double.isNaN(data.usdDailyChange) || !Double.isNaN(data.eurDailyChange)
@@ -32,6 +34,11 @@ final class RateStore {
                     .putLong("daily_usd", Double.doubleToRawLongBits(data.usdDailyChange))
                     .putLong("daily_eur", Double.doubleToRawLongBits(data.eurDailyChange))
                     .putLong("daily_gold", Double.doubleToRawLongBits(data.goldDailyChange))
+                    .apply();
+        }
+        if (!Double.isNaN(data.brentDailyChange)) {
+            prefs.edit()
+                    .putLong("daily_brent", Double.doubleToRawLongBits(data.brentDailyChange))
                     .apply();
         }
     }
@@ -45,12 +52,16 @@ final class RateStore {
         double usd = Double.longBitsToDouble(prefs.getLong("usd", 0));
         double eur = Double.longBitsToDouble(prefs.getLong("eur", 0));
         double gold = Double.longBitsToDouble(prefs.getLong("gold", 0));
+        double brent = prefs.contains("brent")
+                ? Double.longBitsToDouble(prefs.getLong("brent", 0)) : Double.NaN;
         double previousUsd = prefs.contains("previous_updated")
                 ? Double.longBitsToDouble(prefs.getLong("previous_usd", 0)) : Double.NaN;
         double previousEur = prefs.contains("previous_updated")
                 ? Double.longBitsToDouble(prefs.getLong("previous_eur", 0)) : Double.NaN;
         double previousGold = prefs.contains("previous_updated")
                 ? Double.longBitsToDouble(prefs.getLong("previous_gold", 0)) : Double.NaN;
+        double previousBrent = prefs.contains("previous_updated")
+                ? Double.longBitsToDouble(prefs.getLong("previous_brent", 0)) : Double.NaN;
         double dailyUsd = prefs.contains("daily_usd")
                 ? Double.longBitsToDouble(prefs.getLong("daily_usd", 0))
                 : RateMath.percentChange(usd, previousUsd);
@@ -60,8 +71,11 @@ final class RateStore {
         double dailyGold = prefs.contains("daily_gold")
                 ? Double.longBitsToDouble(prefs.getLong("daily_gold", 0))
                 : RateMath.percentChange(gold, previousGold);
+        double dailyBrent = prefs.contains("daily_brent")
+                ? Double.longBitsToDouble(prefs.getLong("daily_brent", 0))
+                : RateMath.percentChange(brent, previousBrent);
         return new RateData(usd, eur, gold, dailyUsd, dailyEur, dailyGold,
-                prefs.getLong("updated", 0));
+                brent, dailyBrent, prefs.getLong("updated", 0));
     }
 
     private static boolean sameDay(long first, long second) {

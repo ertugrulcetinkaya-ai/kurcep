@@ -15,6 +15,7 @@
     <style name="DollarBadge" parent="RateBadge"><item name="android:textColor">@color/dollar_green_light</item></style>
     <style name="EuroBadge" parent="RateBadge"><item name="android:textColor">@color/euro_blue_light</item></style>
     <style name="GoldBadge" parent="RateBadge"><item name="android:textColor">#FFD96A</item></style>
+    <style name="OilBadge" parent="RateBadge"><item name="android:textColor">@color/oil_light</item></style>
     <style name="RateContent">
         <item name="android:layout_width">0dp</item><item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item><item name="android:layout_marginStart">16dp</item>
@@ -26,6 +27,7 @@
     </style>
     <style name="DollarLabel" parent="RateLabel"><item name="android:textColor">@color/dollar_green</item></style>
     <style name="EuroLabel" parent="RateLabel"><item name="android:textColor">@color/euro_blue</item></style>
+    <style name="OilLabel" parent="RateLabel"><item name="android:textColor">@color/oil</item></style>
     <style name="RateValue">
         <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginTop">4dp</item><item name="android:text">—</item>
@@ -34,6 +36,7 @@
     </style>
     <style name="DollarValue" parent="RateValue"><item name="android:textColor">@color/dollar_green</item></style>
     <style name="EuroValue" parent="RateValue"><item name="android:textColor">@color/euro_blue</item></style>
+    <style name="OilValue" parent="RateValue"><item name="android:textColor">@color/oil</item></style>
     <style name="RateValueRow">
         <item name="android:layout_width">match_parent</item><item name="android:layout_height">wrap_content</item>
         <item name="android:gravity">center_vertical</item><item name="android:orientation">horizontal</item>
@@ -53,6 +56,9 @@
     <style name="WidgetGoldRowLabel" parent="WidgetRowLabel">
         <item name="android:textColor">#F6D36C</item>
     </style>
+    <style name="WidgetOilRowLabel" parent="WidgetRowLabel">
+        <item name="android:textColor">@color/oil_light</item>
+    </style>
     <style name="WidgetRowValue">
         <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
         <item name="android:textColor">@color/widget_white</item><item name="android:textSize">27sp</item>
@@ -60,6 +66,7 @@
     </style>
     <style name="WidgetDollarRowValue" parent="WidgetRowValue"><item name="android:textColor">@color/dollar_green_light</item></style>
     <style name="WidgetEuroRowValue" parent="WidgetRowValue"><item name="android:textColor">@color/euro_blue_light</item></style>
+    <style name="WidgetOilRowValue" parent="WidgetRowValue"><item name="android:textColor">@color/oil_light</item></style>
     <style name="WidgetChange">
         <item name="android:layout_width">wrap_content</item><item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginStart">6dp</item><item name="android:textColor">@color/widget_muted</item>

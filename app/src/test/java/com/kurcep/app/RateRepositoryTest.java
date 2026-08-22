@@ -88,6 +88,9 @@ public class RateRepositoryTest {
         assertEquals(RateMath.percentChange(
                 gramGoldTry, 2300.0 * 40.80 / RateRepository.GRAMS_PER_TROY_OUNCE),
                 data.goldDailyChange, 1e-9);
+        // Brent: current price from meta, change against the last completed daily close.
+        assertEquals(78.42, data.brentUsd, 1e-9);
+        assertEquals(RateMath.percentChange(78.42, 78.12), data.brentDailyChange, 1e-9);
         assertTrue(data.updatedAt >= before && data.updatedAt <= after);
     }
 
@@ -120,6 +123,82 @@ public class RateRepositoryTest {
         assertTrue(Double.isNaN(data.usdDailyChange));
         assertTrue(Double.isNaN(data.eurDailyChange));
         assertTrue(Double.isNaN(data.goldDailyChange));
+        // Brent source is not stubbed and fails; it degrades to NaN without failing the fetch.
+        assertTrue(Double.isNaN(data.brentUsd));
+        assertTrue(Double.isNaN(data.brentDailyChange));
+    }
+
+    @Test
+    public void loadRatesKeepsValidGoldChangeWhenCurrencyHistoryFails() throws Exception {
+        double usdTry = 41.25;
+        double eurRate = 1.10;
+        String yesterday = yesterdayIso();
+        double gramGoldTry = 2340.0 * usdTry / RateRepository.GRAMS_PER_TROY_OUNCE;
+        Map<String, RateTransport.Response> responses = new HashMap<>();
+        responses.put(RateRepository.FX_URL, new RateTransport.Response(200,
+                "{\"rates\":{\"TRY\":" + usdTry + ",\"EUR\":" + eurRate + "}}"));
+        responses.put(RateRepository.GOLD_URL, new RateTransport.Response(200, "{\"price\":2340.0}"));
+        // Currency history source fails...
+        responses.put("https://api.frankfurter.app/" + yesterday + "?from=USD&to=TRY,EUR",
+                new RateTransport.Response(500, "dün döviz verisi alınamadı"));
+        // ...but the gold history sources succeed.
+        responses.put("https://api.frankfurter.app/" + yesterday + "?from=USD&to=TRY",
+                new RateTransport.Response(200, "{\"rates\":{\"TRY\":40.80}}"));
+        responses.put(RateRepository.GOLD_HISTORY_URL, new RateTransport.Response(200,
+                "{\"points\":[{\"d\":\"" + yesterday + "\",\"c\":2300.0}]}"));
+        useFakeTransport(address -> {
+            RateTransport.Response response = responses.get(address);
+            if (response == null) {
+                throw new IllegalStateException("Beklenmeyen adres: " + address);
+            }
+            return response;
+        });
+
+        RateData data = RateRepository.loadRates();
+
+        assertEquals(usdTry, data.usdTry, 1e-9);
+        // The currency history failure degrades to NaN without hiding the valid gold change.
+        assertTrue(Double.isNaN(data.usdDailyChange));
+        assertTrue(Double.isNaN(data.eurDailyChange));
+        assertEquals(RateMath.percentChange(
+                gramGoldTry, 2300.0 * 40.80 / RateRepository.GRAMS_PER_TROY_OUNCE),
+                data.goldDailyChange, 1e-9);
+    }
+
+    @Test
+    public void loadRatesWalksBackwardToValidCloseWhenPreviousCloseIsNull() throws Exception {
+        double usdTry = 41.25;
+        double eurRate = 1.10;
+        String yesterday = yesterdayIso();
+        Map<String, RateTransport.Response> responses = new HashMap<>();
+        responses.put(RateRepository.FX_URL, new RateTransport.Response(200,
+                "{\"rates\":{\"TRY\":" + usdTry + ",\"EUR\":" + eurRate + "}}"));
+        responses.put(RateRepository.GOLD_URL, new RateTransport.Response(200, "{\"price\":2340.0}"));
+        responses.put("https://api.frankfurter.app/" + yesterday + "?from=USD&to=TRY,EUR",
+                new RateTransport.Response(200,
+                        "{\"rates\":{\"TRY\":40.80,\"EUR\":" + eurRate + "}}"));
+        responses.put("https://api.frankfurter.app/" + yesterday + "?from=USD&to=TRY",
+                new RateTransport.Response(200, "{\"rates\":{\"TRY\":40.80}}"));
+        responses.put(RateRepository.GOLD_HISTORY_URL, new RateTransport.Response(200,
+                "{\"points\":[{\"d\":\"" + yesterday + "\",\"c\":2300.0}]}"));
+        // The last completed daily close (len-2) and the bars before it are null;
+        // the nearest earlier valid close (77.99) must be used as the baseline.
+        responses.put(RateRepository.BRENT_URL, new RateTransport.Response(200,
+                "{\"chart\":{\"result\":[{\"meta\":{\"regularMarketPrice\":78.42},"
+                        + "\"indicators\":{\"quote\":[{\"close\":["
+                        + "77.99,null,null,null,78.42]}]}}],\"error\":null}}"));
+        useFakeTransport(address -> {
+            RateTransport.Response response = responses.get(address);
+            if (response == null) {
+                throw new IllegalStateException("Beklenmeyen adres: " + address);
+            }
+            return response;
+        });
+
+        RateData data = RateRepository.loadRates();
+
+        assertEquals(78.42, data.brentUsd, 1e-9);
+        assertEquals(RateMath.percentChange(78.42, 77.99), data.brentDailyChange, 1e-9);
     }
 
     private interface FakeResponse {
@@ -153,6 +232,10 @@ public class RateRepositoryTest {
                         + "{\"d\":\"" + yesterday + "\",\"c\":2300.0},"
                         + "{\"d\":\"" + todayIso() + "\",\"c\":2400.0}"
                         + "]}"));
+        responses.put(RateRepository.BRENT_URL, new RateTransport.Response(200,
+                "{\"chart\":{\"result\":[{\"meta\":{\"regularMarketPrice\":78.42},"
+                        + "\"indicators\":{\"quote\":[{\"close\":["
+                        + "76.10,77.05,77.99,78.12,78.42]}]}}],\"error\":null}}"));
         useFakeTransport(address -> {
             RateTransport.Response response = responses.get(address);
             if (response == null) {

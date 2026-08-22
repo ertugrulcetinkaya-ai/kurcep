@@ -11,6 +11,8 @@
     <color name="dollar_green">#18864B</color>
     <color name="dollar_green_light">#79D69A</color>
     <color name="euro_blue">#1769AA</color>
+    <color name="oil">#7A5AA6</color>
+    <color name="oil_light">#B79BE8</color>
     <color name="euro_blue_light">#8BC4FF</color>
     <color name="change_up">#18864B</color>
     <color name="change_down">#C44747</color>
