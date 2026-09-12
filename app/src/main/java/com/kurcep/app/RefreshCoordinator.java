@@ -9,16 +9,19 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Coordinates one shared refresh for the Activity and widget worker. */
 final class RefreshCoordinator implements AutoCloseable {
     interface Callback {
         void onSuccess(RateSnapshot data);
+
         void onError(Exception error);
     }
 
@@ -26,26 +29,56 @@ final class RefreshCoordinator implements AutoCloseable {
         void cancel();
     }
 
+    private interface StoreFactory {
+        RefreshStore create(Context context);
+    }
+
     private final Object lock = new Object();
-    private final RateRepository repository;
+    private final RefreshDataLoader repository;
     private final ExecutorService refreshExecutor;
-    private final Handler main = new Handler(Looper.getMainLooper());
+    private final Executor callbackExecutor;
+    private final StoreFactory storeFactory;
+    private final AtomicLong refreshSequence = new AtomicLong();
     private RefreshTask active;
 
     RefreshCoordinator(RateRepository repository) {
-        this(repository, Executors.newSingleThreadExecutor(newRefreshThreadFactory()));
+        this(repository, Executors.newSingleThreadExecutor(newRefreshThreadFactory()),
+                mainThreadExecutor());
     }
 
-    RefreshCoordinator(RateRepository repository, ExecutorService refreshExecutor) {
+    RefreshCoordinator(RefreshDataLoader repository, ExecutorService refreshExecutor,
+                       Executor callbackExecutor) {
+        this(repository, refreshExecutor, callbackExecutor, AndroidRefreshStore::new);
+    }
+
+    RefreshCoordinator(RefreshDataLoader repository, RefreshStore store,
+                       ExecutorService refreshExecutor, Executor callbackExecutor) {
+        this(repository, refreshExecutor, callbackExecutor, ignored -> store);
+    }
+
+    private RefreshCoordinator(RefreshDataLoader repository, ExecutorService refreshExecutor,
+                               Executor callbackExecutor, StoreFactory storeFactory) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.refreshExecutor = Objects.requireNonNull(refreshExecutor, "refreshExecutor");
+        this.callbackExecutor = Objects.requireNonNull(callbackExecutor, "callbackExecutor");
+        this.storeFactory = Objects.requireNonNull(storeFactory, "storeFactory");
     }
 
     Subscription refresh(Context context, Callback callback) {
         Objects.requireNonNull(context, "context");
+        return register(storeFactory.create(applicationContext(context)), callback);
+    }
+
+    /** Package-private JVM-test entry point using an injected store. */
+    Subscription refresh(Callback callback) {
+        return register(storeFactory.create(null), callback);
+    }
+
+    private Subscription register(RefreshStore store, Callback callback) {
+        Objects.requireNonNull(store, "store");
         Objects.requireNonNull(callback, "callback");
         synchronized (lock) {
-            RefreshTask task = getOrStartLocked(context.getApplicationContext());
+            RefreshTask task = getOrStartLocked(store);
             Registration registration = new Registration(task, callback);
             task.registrations.add(registration);
             return registration;
@@ -53,14 +86,21 @@ final class RefreshCoordinator implements AutoCloseable {
     }
 
     RateSnapshot refreshBlocking(Context context) throws Exception {
+        Objects.requireNonNull(context, "context");
+        return refreshBlocking(storeFactory.create(applicationContext(context)));
+    }
+
+    /** Package-private JVM-test entry point using an injected store. */
+    RateSnapshot refreshBlocking(RefreshStore store) throws Exception {
         RefreshTask task;
         synchronized (lock) {
-            task = getOrStartLocked(context.getApplicationContext());
+            task = getOrStartLocked(Objects.requireNonNull(store, "store"));
         }
         try {
             return task.get();
         } catch (InterruptedException error) {
-            task.cancel(true);
+            // This waiter owns only its wait. The FutureTask can be shared by Activity
+            // registrations, so interrupting one consumer must not cancel the refresh.
             Thread.currentThread().interrupt();
             throw error;
         } catch (CancellationException error) {
@@ -70,25 +110,42 @@ final class RefreshCoordinator implements AutoCloseable {
         }
     }
 
-    private RefreshTask getOrStartLocked(Context context) {
+    long nextRefreshIdForTest() {
+        return nextRefreshId();
+    }
+
+    private RefreshTask getOrStartLocked(RefreshStore store) {
         if (active == null || active.isDone()) {
-            long refreshId = RateStore.nextRefreshId(context);
-            active = new RefreshTask(context, refreshId);
+            active = new RefreshTask(store, nextRefreshId());
             refreshExecutor.execute(active);
         }
         return active;
     }
 
-    private RateSnapshot executeRefresh(Context context, long refreshId) throws Exception {
+    private long nextRefreshId() {
+        long now = System.currentTimeMillis();
+        while (true) {
+            long previous = refreshSequence.get();
+            if (previous == Long.MAX_VALUE) {
+                return Long.MAX_VALUE;
+            }
+            long next = Math.max(now, previous + 1);
+            if (refreshSequence.compareAndSet(previous, next)) {
+                return next;
+            }
+        }
+    }
+
+    private RateSnapshot executeRefresh(RefreshStore store, long refreshId) throws Exception {
         RateSnapshot data = repository.loadRates(refreshId);
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException("Refresh iptal edildi");
         }
-        boolean saved = RateStore.save(context, data);
+        boolean saved = store.save(data);
         if (saved) {
             return data;
         }
-        RateSnapshot current = RateStore.load(context);
+        RateSnapshot current = store.load();
         return current == null ? data : current;
     }
 
@@ -108,8 +165,8 @@ final class RefreshCoordinator implements AutoCloseable {
     private final class RefreshTask extends FutureTask<RateSnapshot> {
         private final List<Registration> registrations = new ArrayList<>();
 
-        RefreshTask(Context context, long refreshId) {
-            super(() -> executeRefresh(context, refreshId));
+        RefreshTask(RefreshStore store, long refreshId) {
+            super(() -> executeRefresh(store, refreshId));
         }
 
         @Override
@@ -124,7 +181,7 @@ final class RefreshCoordinator implements AutoCloseable {
             }
 
             try {
-            RateSnapshot data = get();
+                RateSnapshot data = get();
                 for (Registration registration : completed) {
                     postSuccess(registration, data);
                 }
@@ -146,7 +203,7 @@ final class RefreshCoordinator implements AutoCloseable {
         }
 
         private void postSuccess(Registration registration, RateSnapshot data) {
-            main.post(() -> {
+            callbackExecutor.execute(() -> {
                 if (!registration.isCancelled()) {
                     registration.callback.onSuccess(data);
                 }
@@ -154,7 +211,7 @@ final class RefreshCoordinator implements AutoCloseable {
         }
 
         private void postError(Registration registration, Exception error) {
-            main.post(() -> {
+            callbackExecutor.execute(() -> {
                 if (!registration.isCancelled()) {
                     registration.callback.onError(error);
                 }
@@ -185,6 +242,16 @@ final class RefreshCoordinator implements AutoCloseable {
                 return cancelled;
             }
         }
+    }
+
+    private static Context applicationContext(Context context) {
+        Context application = context.getApplicationContext();
+        return application == null ? context : application;
+    }
+
+    private static Executor mainThreadExecutor() {
+        Handler handler = new Handler(Looper.getMainLooper());
+        return handler::post;
     }
 
     private static Exception asException(Throwable error) {

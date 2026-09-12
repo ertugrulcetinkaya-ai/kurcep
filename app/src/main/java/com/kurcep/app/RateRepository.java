@@ -20,7 +20,7 @@ import static com.kurcep.app.RateJsonValues.requiredObject;
 import static com.kurcep.app.RateJsonValues.requiredPositive;
 
 /** Orchestrates provider calls and combines their results into one immutable snapshot. */
-final class RateRepository implements AutoCloseable {
+final class RateRepository implements RefreshDataLoader {
     static final String FX_URL = FxDataSource.CURRENT_URL;
     static final String GOLD_URL = GoldDataSource.CURRENT_URL;
     static final String GOLD_HISTORY_URL = GoldDataSource.HISTORY_URL;
@@ -63,7 +63,8 @@ final class RateRepository implements AutoCloseable {
         return loadRates(System.currentTimeMillis());
     }
 
-    RateSnapshot loadRates(long refreshId) throws Exception {
+    @Override
+    public RateSnapshot loadRates(long refreshId) throws Exception {
         String yesterday = yesterday();
         List<Future<?>> requests = new ArrayList<>(NETWORK_THREADS);
         Future<JSONObject> fxFuture = submit(requests, fxSource::current);

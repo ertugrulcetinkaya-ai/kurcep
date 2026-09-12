@@ -3,30 +3,10 @@ package com.kurcep.app;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import java.util.Calendar;
-
 final class RateStore {
     private static final String PREFS = "rates";
-    private static final String REFRESH_SEQUENCE = "refresh_sequence";
     private static final String REFRESH_ID = "refresh_id";
     private static final Object LOCK = new Object();
-
-    static long nextRefreshId(Context context) {
-        return nextRefreshId(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE));
-    }
-
-    static long nextRefreshId(SharedPreferences prefs) {
-        synchronized (LOCK) {
-            long previous = prefs.getLong(REFRESH_SEQUENCE, 0L);
-            long now = System.currentTimeMillis();
-            long next = previous == Long.MAX_VALUE
-                    ? Long.MAX_VALUE : Math.max(now, previous + 1);
-            if (!prefs.edit().putLong(REFRESH_SEQUENCE, next).commit()) {
-                throw new IllegalStateException("Refresh sırası kaydedilemedi");
-            }
-            return next;
-        }
-    }
 
     static boolean save(Context context, RateSnapshot data) {
         return saveIfNewer(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE), data);
@@ -44,20 +24,20 @@ final class RateStore {
             }
 
             SharedPreferences.Editor editor = prefs.edit();
-            if (prefs.contains("updated") && !sameDay(prefs.getLong("updated", 0), data.updatedAt)) {
-                editor.putLong("previous_usd", prefs.getLong("usd", 0));
-                editor.putLong("previous_eur", prefs.getLong("eur", 0));
-                editor.putLong("previous_gold", prefs.getLong("gold", 0));
-                editor.putLong("previous_brent", prefs.getLong("brent", 0));
-                editor.putLong("previous_updated", prefs.getLong("updated", 0));
-            }
             editor
                     .putLong("usd", Double.doubleToRawLongBits(data.usdTry.value))
                     .putLong("eur", Double.doubleToRawLongBits(data.eurTry.value))
                     .putLong("gold", Double.doubleToRawLongBits(data.gramGoldTry.value))
                     .putLong("brent", Double.doubleToRawLongBits(data.brentUsd.value))
                     .putLong(REFRESH_ID, data.refreshId)
-                    .putLong("updated", data.updatedAt);
+                    .putLong("updated", data.updatedAt)
+                    // Remove the legacy derived-snapshot cache during migration. Daily
+                    // changes now come only from the current refresh result.
+                    .remove("previous_usd")
+                    .remove("previous_eur")
+                    .remove("previous_gold")
+                    .remove("previous_brent")
+                    .remove("previous_updated");
             writeDailyChange(editor, "daily_usd", data.usdTry.dailyChange);
             writeDailyChange(editor, "daily_eur", data.eurTry.dailyChange);
             writeDailyChange(editor, "daily_gold", data.gramGoldTry.dailyChange);
@@ -104,16 +84,6 @@ final class RateStore {
     private static double readDailyChange(SharedPreferences prefs, String key) {
         return prefs.contains(key)
                 ? Double.longBitsToDouble(prefs.getLong(key, 0)) : Double.NaN;
-    }
-
-    private static boolean sameDay(long first, long second) {
-        Calendar a = Calendar.getInstance();
-        Calendar b = Calendar.getInstance();
-        a.setTimeInMillis(first);
-        b.setTimeInMillis(second);
-        return a.get(Calendar.ERA) == b.get(Calendar.ERA)
-                && a.get(Calendar.YEAR) == b.get(Calendar.YEAR)
-                && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR);
     }
 
     private RateStore() {}

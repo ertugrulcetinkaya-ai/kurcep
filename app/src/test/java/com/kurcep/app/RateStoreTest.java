@@ -18,16 +18,6 @@ import static org.junit.Assert.assertTrue;
 
 public class RateStoreTest {
     @Test
-    public void allocatesMonotonicRefreshIds() {
-        SharedPreferences prefs = inMemoryPreferences();
-
-        long first = RateStore.nextRefreshId(prefs);
-        long second = RateStore.nextRefreshId(prefs);
-
-        assertTrue(second > first);
-    }
-
-    @Test
     public void savesAndLoadsRatesAndDailyChanges() {
         SharedPreferences prefs = inMemoryPreferences();
         RateSnapshot input = snapshot(40.25, 43.75, 2500.50,

@@ -24,8 +24,8 @@ The widget renders cached data immediately and queues a unique, network-constrai
 
 ## Architecture and verification
 
-`RateRepository` coordinates one single-flight refresh through dedicated FX, gold, Brent,
-JSON, and HTTP source classes. Results are represented as an immutable `RateSnapshot` made
+`RefreshCoordinator` coordinates one single-flight refresh through `RateRepository` and its
+dedicated FX, gold, Brent, JSON, and HTTP source classes. Results are represented as an immutable `RateSnapshot` made
 of `RateQuote` values, then persisted atomically with a monotonic refresh ID. Optional source
 failures are represented as `RateQuote.Status.UNAVAILABLE`, separately from a missing daily
 change. UI and widget formatting share the same pure-Java formatter.
@@ -37,7 +37,7 @@ Run the local quality gates with:
 ```
 
 The JVM tests run with Android default stubs disabled, and the deterministic domain/network
-coverage gate requires at least 60% line coverage. CI additionally runs secret scanning,
+coverage gate requires at least 70% line coverage. CI additionally runs secret scanning,
 CodeQL, dependency review, and Dependabot updates.
 
 The manual/tag-triggered `Release package` workflow produces unsigned AAB/APK artifacts. A

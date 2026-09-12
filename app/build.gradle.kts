@@ -64,6 +64,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.core:core:1.15.0")
     implementation("androidx.work:work-runtime:2.11.2")
     testImplementation("junit:junit:4.13.2")
     // android.jar ships org.json stubs that cannot parse; local unit tests need the real library.
@@ -83,6 +84,10 @@ val coverageClassDirectories = fileTree(
         .asFile
 ) {
     include("com/kurcep/app/Rate*.class")
+    include("com/kurcep/app/*DataSource*.class")
+    include("com/kurcep/app/HttpRateTransport*.class")
+    include("com/kurcep/app/RefreshCoordinator*.class")
+    exclude("com/kurcep/app/RatesWidget*.class")
 }
 val coverageExecutionData = fileTree(layout.buildDirectory.get().asFile) {
     include("jacoco/testDebugUnitTest.exec")
@@ -110,7 +115,7 @@ tasks.register<JacocoCoverageVerification>("jacocoTestDebugUnitTestCoverageVerif
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                minimum = "0.60".toBigDecimal()
+                minimum = "0.70".toBigDecimal()
             }
         }
     }

@@ -3,12 +3,15 @@ package com.kurcep.app;
 import android.app.Activity;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
-import android.view.WindowInsets;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import java.text.NumberFormat;
 
@@ -56,30 +59,14 @@ public class MainActivity extends Activity {
         int baseTop = root.getPaddingTop();
         int baseRight = root.getPaddingRight();
         int baseBottom = root.getPaddingBottom();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            getWindow().setDecorFitsSystemWindows(false);
-        } else {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-        }
-        root.setOnApplyWindowInsetsListener((view, insets) -> {
-            int top;
-            int bottom;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                android.graphics.Insets systemBars = insets.getInsets(
-                        WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                top = systemBars.top;
-                bottom = systemBars.bottom;
-            } else {
-                top = insets.getSystemWindowInsetTop();
-                bottom = insets.getSystemWindowInsetBottom();
-            }
-            view.setPadding(baseLeft, baseTop + top, baseRight, baseBottom + bottom);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            view.setPadding(baseLeft, baseTop + systemBars.top,
+                    baseRight, baseBottom + systemBars.bottom);
             return insets;
         });
-        root.requestApplyInsets();
+        ViewCompat.requestApplyInsets(root);
     }
 
     private void refresh() {

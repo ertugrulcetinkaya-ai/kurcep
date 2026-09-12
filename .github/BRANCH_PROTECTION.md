@@ -14,4 +14,4 @@ check when the repository ruleset supports event-specific checks. A mandatory re
 optional for this single-maintainer repository; the CI checks and force-push protection are
 the important controls.
 
-This file documents the intended policy; it does not change GitHub settings by itself.
+This file documents the policy; keep the GitHub branch protection settings synchronized with it.
