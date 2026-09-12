@@ -1,5 +1,9 @@
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     id("com.android.application")
+    id("jacoco")
 }
 
 val releaseStoreFile = providers.gradleProperty("RELEASE_STORE_FILE").orNull
@@ -28,9 +32,9 @@ android {
     }
 
     testOptions {
-        // Unit tests run on the JVM: Android classes (Looper, Handler, Log) return defaults
-        // instead of throwing so the repository code paths can execute without a device.
-        unitTests.isReturnDefaultValues = true
+        // Core repository/parsing tests must fail loudly if an Android API leaks into them.
+        // UI and WorkManager behavior belongs in device/instrumentation tests.
+        unitTests.isReturnDefaultValues = false
     }
 
     signingConfigs {
@@ -64,4 +68,54 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // android.jar ships org.json stubs that cannot parse; local unit tests need the real library.
     testImplementation("org.json:json:20240303")
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+// Keep the coverage gate focused on the deterministic domain/network layer. Android UI,
+// widget callbacks, and lifecycle glue require an instrumented/device environment.
+val coverageClassDirectories = fileTree(
+    layout.buildDirectory
+        .dir("intermediates/javac/debug/compileDebugJavaWithJavac/classes")
+        .get()
+        .asFile
+) {
+    include("com/kurcep/app/Rate*.class")
+}
+val coverageExecutionData = fileTree(layout.buildDirectory.get().asFile) {
+    include("jacoco/testDebugUnitTest.exec")
+    include("outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec")
+}
+
+val jacocoTestDebugUnitTestReport = tasks.register<JacocoReport>("jacocoTestDebugUnitTestReport") {
+    dependsOn("testDebugUnitTest")
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    sourceDirectories.setFrom(files("$projectDir/src/main/java"))
+    classDirectories.setFrom(coverageClassDirectories)
+    executionData.setFrom(coverageExecutionData)
+}
+
+tasks.register<JacocoCoverageVerification>("jacocoTestDebugUnitTestCoverageVerification") {
+    dependsOn(jacocoTestDebugUnitTestReport)
+    sourceDirectories.setFrom(files("$projectDir/src/main/java"))
+    classDirectories.setFrom(coverageClassDirectories)
+    executionData.setFrom(coverageExecutionData)
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.60".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn("jacocoTestDebugUnitTestCoverageVerification")
 }

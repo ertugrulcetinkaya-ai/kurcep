@@ -1,167 +1,210 @@
 package com.kurcep.app;
 
-import android.os.Handler;
-import android.os.Looper;
-import android.util.Log;
-
-import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
-final class RateRepository {
-    private static final String TAG = "RateRepository";
-    static final String FX_URL = "https://open.er-api.com/v6/latest/USD";
-    static final String GOLD_URL = "https://api.gold-api.com/price/XAU";
-    static final String GOLD_HISTORY_URL = "https://xaus.com/api/v1/history";
-    static final String BRENT_URL =
-            "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F?range=5d&interval=1d";
+import static com.kurcep.app.RateJsonValues.requirePositive;
+import static com.kurcep.app.RateJsonValues.requiredObject;
+import static com.kurcep.app.RateJsonValues.requiredPositive;
+
+/** Orchestrates provider calls and combines their results into one immutable snapshot. */
+final class RateRepository implements AutoCloseable {
+    static final String FX_URL = FxDataSource.CURRENT_URL;
+    static final String GOLD_URL = GoldDataSource.CURRENT_URL;
+    static final String GOLD_HISTORY_URL = GoldDataSource.HISTORY_URL;
+    static final String BRENT_URL = BrentDataSource.URL;
     static final double GRAMS_PER_TROY_OUNCE = 31.1034768;
-    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    static final int MAX_RESPONSE_BYTES = RateJsonClient.MAX_RESPONSE_BYTES;
+    private static final int NETWORK_THREADS = 5;
 
-    // Package-private so unit tests can replace it with a fake implementation.
-    static RateTransport transport = new HttpRateTransport();
+    private final RateJsonClient jsonClient;
+    private final FxDataSource fxSource;
+    private final GoldDataSource goldSource;
+    private final BrentDataSource brentSource;
+    private final ExecutorService networkExecutor;
+    private final RateDiagnostics diagnostics;
 
-    interface Callback {
-        void onSuccess(RateData data);
-        void onError(Exception error);
+    RateRepository(RateTransport transport) {
+        this(transport, newFixedThreadPool(), RateDiagnostics.NO_OP);
     }
 
-    static void fetch(Callback callback) {
-        EXECUTOR.execute(() -> {
-            try {
-                RateData result = loadRates();
-                MAIN.post(() -> callback.onSuccess(result));
-            } catch (Exception error) {
-                Log.e(TAG, "Güncel kurlar alınamadı", error);
-                MAIN.post(() -> callback.onError(asException(error)));
-            }
-        });
+    RateRepository(RateTransport transport, ExecutorService networkExecutor) {
+        this(transport, networkExecutor, RateDiagnostics.NO_OP);
     }
 
-    // Package-private so unit tests can exercise the full computation with a fake transport.
-    static RateData loadRates() throws Exception {
-        // These requests are independent. Starting them together keeps a slow source
-        // from serially extending the fetch time.
-        Future<JSONObject> fxFuture = EXECUTOR.submit(() -> getJson(FX_URL));
-        Future<JSONObject> goldFuture = EXECUTOR.submit(() -> getJson(GOLD_URL));
-        Future<double[]> brentFuture = EXECUTOR.submit(RateRepository::fetchBrent);
-
-        JSONObject rates = fxFuture.get().getJSONObject("rates");
-        double usdTry = rates.getDouble("TRY");
-        double eurTry = usdTry / rates.getDouble("EUR");
-        double goldUsdPerOunce = goldFuture.get().getDouble("price");
-        double gramGoldTry = goldUsdPerOunce * usdTry / GRAMS_PER_TROY_OUNCE;
-
-        // Historical sources are optional and independent. A failure in one does not
-        // hide a valid daily change from another source.
-        Future<double[]> currencyChange = EXECUTOR.submit(
-                () -> fetchCurrencyDailyChange(usdTry, eurTry));
-        Future<Double> goldChange = EXECUTOR.submit(
-                () -> fetchGoldDailyChange(gramGoldTry));
-
-        double[] currencyChanges = currencyChange.get();
-        double dailyGoldChange = goldChange.get();
-        double[] brent = brentFuture.get();
-        return new RateData(usdTry, eurTry, gramGoldTry,
-                currencyChanges[0], currencyChanges[1], dailyGoldChange,
-                brent[0], brent[1],
-                System.currentTimeMillis());
+    RateRepository(RateTransport transport, ExecutorService networkExecutor,
+                   RateDiagnostics diagnostics) {
+        this.jsonClient = new RateJsonClient(Objects.requireNonNull(transport, "transport"));
+        this.fxSource = new FxDataSource(jsonClient);
+        this.goldSource = new GoldDataSource(jsonClient);
+        this.brentSource = new BrentDataSource(jsonClient);
+        this.networkExecutor = Objects.requireNonNull(networkExecutor, "networkExecutor");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
     }
 
-    private static double[] fetchCurrencyDailyChange(double usdTry, double eurTry) {
+    static RateRepository production() {
+        return new RateRepository(new HttpRateTransport(), newFixedThreadPool(),
+                new AndroidRateDiagnostics());
+    }
+
+    RateSnapshot loadRates() throws Exception {
+        return loadRates(System.currentTimeMillis());
+    }
+
+    RateSnapshot loadRates(long refreshId) throws Exception {
+        String yesterday = yesterday();
+        List<Future<?>> requests = new ArrayList<>(NETWORK_THREADS);
+        Future<JSONObject> fxFuture = submit(requests, fxSource::current);
+        Future<JSONObject> goldFuture = submit(requests, goldSource::current);
+        Future<RateQuote> brentFuture = submit(requests, this::fetchBrent);
+        Future<JSONObject> previousFxFuture = submit(requests, () -> fxSource.previous(yesterday));
+        Future<JSONObject> goldHistoryFuture = submit(requests, goldSource::history);
+        boolean successful = false;
+
         try {
-            String date = yesterday();
-            JSONObject historical = getJson("https://api.frankfurter.app/" + date
-                    + "?from=USD&to=TRY,EUR");
-            JSONObject rates = historical.getJSONObject("rates");
-            double previousUsdTry = rates.getDouble("TRY");
-            double previousEurTry = previousUsdTry / rates.getDouble("EUR");
+            JSONObject rates = requiredObject(await(fxFuture), "rates");
+            double usdTry = requiredPositive(rates, "TRY");
+            double usdPerEur = requiredPositive(rates, "EUR");
+            double eurTry = requirePositive(usdTry / usdPerEur, "EUR/TRY");
+
+            double goldUsdPerOunce = requiredPositive(await(goldFuture), "price");
+            double gramGoldTry = requirePositive(
+                    goldUsdPerOunce * usdTry / GRAMS_PER_TROY_OUNCE, "gram gold TRY");
+
+            JSONObject previousFx = awaitOptional(previousFxFuture, "Döviz geçmiş verisi");
+            JSONObject goldHistory = awaitOptional(goldHistoryFuture, "Altın geçmiş verisi");
+            double[] currencyChanges = calculateCurrencyDailyChange(
+                    usdTry, eurTry, previousFx);
+            double dailyGoldChange = calculateGoldDailyChange(
+                    gramGoldTry, previousFx, goldHistory, yesterday);
+            RateQuote brent = await(brentFuture);
+
+            successful = true;
+            return new RateSnapshot(
+                    new RateQuote(usdTry, currencyChanges[0]),
+                    new RateQuote(eurTry, currencyChanges[1]),
+                    new RateQuote(gramGoldTry, dailyGoldChange),
+                    brent,
+                    System.currentTimeMillis(),
+                    refreshId);
+        } finally {
+            if (!successful) {
+                cancelAll(requests);
+            }
+        }
+    }
+
+    JSONObject getJson(String address) throws Exception {
+        return jsonClient.getJson(address);
+    }
+
+    private double[] calculateCurrencyDailyChange(double usdTry, double eurTry,
+                                                  JSONObject historical) {
+        if (historical == null) {
+            return new double[]{Double.NaN, Double.NaN};
+        }
+        try {
+            JSONObject rates = requiredObject(historical, "rates");
+            double previousUsdTry = requiredPositive(rates, "TRY");
+            double previousUsdPerEur = requiredPositive(rates, "EUR");
+            double previousEurTry = requirePositive(
+                    previousUsdTry / previousUsdPerEur, "previous EUR/TRY");
             return new double[]{
                     RateMath.percentChange(usdTry, previousUsdTry),
                     RateMath.percentChange(eurTry, previousEurTry)
             };
         } catch (Exception error) {
-            Log.w(TAG, "Döviz geçmiş verisi alınamadı", error);
+            diagnostics.warn("Döviz geçmiş verisi geçersiz", error);
             return new double[]{Double.NaN, Double.NaN};
         }
     }
 
-    private static double fetchGoldDailyChange(double gramGoldTry) {
+    private double calculateGoldDailyChange(double gramGoldTry, JSONObject historicalFx,
+                                            JSONObject goldHistory, String yesterday) {
+        if (historicalFx == null || goldHistory == null) {
+            return Double.NaN;
+        }
         try {
-            JSONObject fx = getJson("https://api.frankfurter.app/" + yesterday()
-                    + "?from=USD&to=TRY");
-            double previousUsdTry = fx.getJSONObject("rates").getDouble("TRY");
-            double previousGoldUsdPerOunce = fetchPreviousGoldClose();
-            double previousGoldTry = previousGoldUsdPerOunce * previousUsdTry
-                    / GRAMS_PER_TROY_OUNCE;
+            JSONObject rates = requiredObject(historicalFx, "rates");
+            double previousUsdTry = requiredPositive(rates, "TRY");
+            double previousGoldUsdPerOunce = goldSource.previousClose(goldHistory, yesterday);
+            double previousGoldTry = requirePositive(
+                    previousGoldUsdPerOunce * previousUsdTry / GRAMS_PER_TROY_OUNCE,
+                    "previous gram gold TRY");
             return RateMath.percentChange(gramGoldTry, previousGoldTry);
         } catch (Exception error) {
-            Log.w(TAG, "Altın geçmiş verisi alınamadı", error);
+            diagnostics.warn("Altın geçmiş verisi geçersiz", error);
             return Double.NaN;
         }
     }
 
-    // Brent is independent of the FX and gold sources: a failure here only
-    // removes Brent (NaN), never the other prices.
-    private static double[] fetchBrent() {
+    // Brent is optional: a failure here removes only Brent from the snapshot.
+    private RateQuote fetchBrent() throws Exception {
         try {
-            JSONObject result = getJson(BRENT_URL)
-                    .getJSONObject("chart").getJSONArray("result").getJSONObject(0);
-            double current = result.getJSONObject("meta").getDouble("regularMarketPrice");
-            JSONArray closes = result.getJSONObject("indicators")
-                    .getJSONArray("quote").getJSONObject(0).getJSONArray("close");
-            if (closes.length() < 2) {
-                throw new IllegalStateException("Brent geçmiş verisi yok");
-            }
-            // The last bar is the current session, so the previous bar's close is
-            // the last completed daily close. Yahoo may leave null entries there,
-            // so walk back to the nearest earlier valid close as the baseline.
-            double previous = Double.NaN;
-            for (int i = closes.length() - 2; i >= 0; i--) {
-                Object value = closes.opt(i);
-                if (value instanceof Number) {
-                    double candidate = ((Number) value).doubleValue();
-                    if (!Double.isNaN(candidate) && !Double.isInfinite(candidate)) {
-                        previous = candidate;
-                        break;
-                    }
-                }
-            }
-            if (Double.isNaN(previous)) {
-                return new double[]{Double.NaN, Double.NaN};
-            }
-            return new double[]{current, RateMath.percentChange(current, previous)};
+            return brentSource.fetch();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw error;
         } catch (Exception error) {
-            Log.w(TAG, "Brent verisi alınamadı", error);
-            return new double[]{Double.NaN, Double.NaN};
+            diagnostics.warn("Brent verisi alınamadı", error);
+            return RateQuote.unavailable();
         }
     }
 
-    private static double fetchPreviousGoldClose() throws Exception {
-        JSONObject history = getJson(GOLD_HISTORY_URL);
-        JSONArray points = history.getJSONArray("points");
-        String yesterday = yesterday();
-        for (int i = points.length() - 1; i >= 0; i--) {
-            JSONObject point = points.getJSONObject(i);
-            if (point.getString("d").compareTo(yesterday) <= 0) {
-                return point.getDouble("c");
-            }
+    private <T> Future<T> submit(List<Future<?>> requests,
+                                 java.util.concurrent.Callable<T> task) {
+        Future<T> future = networkExecutor.submit(task);
+        requests.add(future);
+        return future;
+    }
+
+    private <T> T await(Future<T> future) throws Exception {
+        try {
+            return future.get();
+        } catch (InterruptedException error) {
+            cancelAll(java.util.Collections.singletonList(future));
+            Thread.currentThread().interrupt();
+            throw error;
+        } catch (ExecutionException error) {
+            throw asException(error.getCause());
         }
-        throw new IllegalStateException("Altın geçmiş verisi yok");
+    }
+
+    private JSONObject awaitOptional(Future<JSONObject> future, String source) throws Exception {
+        try {
+            return await(future);
+        } catch (InterruptedException error) {
+            throw error;
+        } catch (Exception error) {
+            diagnostics.warn(source + " alınamadı", error);
+            return null;
+        }
+    }
+
+    private static void cancelAll(List<? extends Future<?>> requests) {
+        for (Future<?> request : requests) {
+            request.cancel(true);
+        }
+    }
+
+    static String previousFxUrl(String date) {
+        return FxDataSource.previousUrl(date);
+    }
+
+    static String readLimitedBody(java.io.InputStream stream) throws Exception {
+        return RateJsonClient.readLimitedBody(stream);
     }
 
     private static String yesterday() {
@@ -170,50 +213,25 @@ final class RateRepository {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.getTime());
     }
 
-    static JSONObject getJson(String address) throws Exception {
-        RateTransport.Response response = transport.get(address);
-        if (response.status < 200 || response.status >= 300) {
-            throw new IllegalStateException("Sunucu hatası: " + response.status);
-        }
-        return new JSONObject(response.body);
+    private static ExecutorService newFixedThreadPool() {
+        AtomicInteger counter = new AtomicInteger();
+        ThreadFactory factory = runnable -> {
+            Thread thread = new Thread(runnable, "kurcep-rate-" + counter.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        };
+        return Executors.newFixedThreadPool(NETWORK_THREADS, factory);
     }
 
-    /**
-     * Production transport: the same HttpURLConnection behavior the repository
-     * used before the transport seam was introduced.
-     */
-    private static final class HttpRateTransport implements RateTransport {
-        @Override
-        public RateTransport.Response get(String address) throws Exception {
-            HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
-            connection.setConnectTimeout(10_000);
-            connection.setReadTimeout(10_000);
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "KurCep-Android/1.0");
-            try {
-                int status = connection.getResponseCode();
-                InputStream stream = status >= 200 && status < 300
-                        ? connection.getInputStream() : connection.getErrorStream();
-                if (stream == null) throw new IllegalStateException("Sunucu yanıt vermedi");
-                StringBuilder body = new StringBuilder();
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) body.append(line);
-                }
-                return new RateTransport.Response(status, body.toString());
-            } finally {
-                connection.disconnect();
-            }
-        }
+    @Override
+    public void close() {
+        networkExecutor.shutdownNow();
     }
 
-    private static Exception asException(Exception error) {
-        if (error instanceof ExecutionException && error.getCause() instanceof Exception) {
-            return (Exception) error.getCause();
+    private static Exception asException(Throwable error) {
+        if (error instanceof Exception) {
+            return (Exception) error;
         }
-        return error;
+        return new PermanentRateException("Beklenmeyen repository hatası", error);
     }
-
-    private RateRepository() {}
 }

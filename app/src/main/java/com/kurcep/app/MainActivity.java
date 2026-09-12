@@ -11,9 +11,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.NumberFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 
 public class MainActivity extends Activity {
     private final NumberFormat currency = Formatters.currency();
@@ -27,6 +24,9 @@ public class MainActivity extends Activity {
     private TextView brentChange;
     private TextView updatedValue;
     private View refreshButton;
+    private long activeUiRefreshId;
+    private RefreshCoordinator.Subscription refreshSubscription;
+    private boolean destroyed;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,7 +45,7 @@ public class MainActivity extends Activity {
         refreshButton = findViewById(R.id.refresh_button);
         refreshButton.setOnClickListener(v -> refresh());
 
-        RateData cached = RateStore.load(this);
+        RateSnapshot cached = RateStore.load(this);
         if (cached != null) show(cached);
         refresh();
     }
@@ -83,13 +83,17 @@ public class MainActivity extends Activity {
     }
 
     private void refresh() {
+        if (refreshSubscription != null) {
+            refreshSubscription.cancel();
+        }
         refreshButton.setEnabled(false);
         updatedValue.setText(R.string.updating);
-        RateRepository.fetch(new RateRepository.Callback() {
-            @Override public void onSuccess(RateData data) {
-                if (isFinishing()) return;
-                RateStore.save(MainActivity.this, data);
+        long uiRefreshId = ++activeUiRefreshId;
+        refreshSubscription = getRefreshCoordinator().refresh(this, new RefreshCoordinator.Callback() {
+            @Override public void onSuccess(RateSnapshot data) {
+                if (!isCurrentRefresh(uiRefreshId)) return;
                 show(data);
+                refreshSubscription = null;
                 refreshButton.setEnabled(true);
                 RatesWidgetProvider.updateAll(MainActivity.this,
                         AppWidgetManager.getInstance(MainActivity.this),
@@ -97,9 +101,10 @@ public class MainActivity extends Activity {
             }
 
             @Override public void onError(Exception error) {
-                if (isFinishing()) return;
+                if (!isCurrentRefresh(uiRefreshId)) return;
+                refreshSubscription = null;
                 refreshButton.setEnabled(true);
-                RateData cached = RateStore.load(MainActivity.this);
+                RateSnapshot cached = RateStore.load(MainActivity.this);
                 if (cached != null) show(cached);
                 else updatedValue.setText(R.string.no_data);
                 Toast.makeText(MainActivity.this, R.string.update_failed, Toast.LENGTH_SHORT).show();
@@ -107,29 +112,46 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void show(RateData data) {
-        usdValue.setText(getString(R.string.lira_value, currency.format(data.usdTry)));
-        eurValue.setText(getString(R.string.lira_value, currency.format(data.eurTry)));
-        goldValue.setText(getString(R.string.lira_value, currency.format(data.gramGoldTry)));
-        brentValue.setText(Double.isNaN(data.brentUsd) ? "—"
-                : getString(R.string.usd_value, currency.format(data.brentUsd)));
-        showChange(usdChange, data.usdDailyChange);
-        showChange(eurChange, data.eurDailyChange);
-        showChange(goldChange, data.goldDailyChange);
-        showChange(brentChange, data.brentDailyChange);
-        String time = new SimpleDateFormat("HH:mm", new Locale("tr", "TR"))
-                .format(new Date(data.updatedAt));
-        updatedValue.setText(getString(R.string.last_updated, time));
+    private RefreshCoordinator getRefreshCoordinator() {
+        return ((KurCepApplication) getApplication()).getRefreshCoordinator();
     }
 
-    private void showChange(TextView view, double change) {
-        if (Double.isNaN(change)) {
-            view.setText("—");
-            view.setTextColor(getColor(R.color.muted));
-            return;
+    private boolean isCurrentRefresh(long uiRefreshId) {
+        return !destroyed && !isFinishing() && activeUiRefreshId == uiRefreshId;
+    }
+
+    @Override
+    protected void onDestroy() {
+        destroyed = true;
+        if (refreshSubscription != null) {
+            refreshSubscription.cancel();
+            refreshSubscription = null;
         }
-        boolean up = change >= 0;
-        view.setText(getString(R.string.daily_change, up ? "↑" : "↓", currency.format(Math.abs(change))));
-        view.setTextColor(getColor(up ? R.color.change_up : R.color.change_down));
+        super.onDestroy();
+    }
+
+    private void show(RateSnapshot data) {
+        usdValue.setText(getString(R.string.lira_value, currency.format(data.usdTry.value)));
+        eurValue.setText(getString(R.string.lira_value, currency.format(data.eurTry.value)));
+        goldValue.setText(getString(R.string.lira_value,
+                currency.format(data.gramGoldTry.value)));
+        brentValue.setText(!data.brentUsd.isAvailable() ? "—"
+                : getString(R.string.usd_value, currency.format(data.brentUsd.value)));
+        showChange(usdChange, data.usdTry);
+        showChange(eurChange, data.eurTry);
+        showChange(goldChange, data.gramGoldTry);
+        showChange(brentChange, data.brentUsd);
+        updatedValue.setText(getString(R.string.last_updated,
+                RateDisplayFormatter.time(data.updatedAt)));
+    }
+
+    private void showChange(TextView view, RateQuote quote) {
+        if (!quote.hasDailyChange()) {
+            view.setTextColor(getColor(R.color.muted));
+        } else {
+            boolean up = quote.dailyChange >= 0;
+            view.setTextColor(getColor(up ? R.color.change_up : R.color.change_down));
+        }
+        view.setText(RateDisplayFormatter.change(currency, quote));
     }
 }

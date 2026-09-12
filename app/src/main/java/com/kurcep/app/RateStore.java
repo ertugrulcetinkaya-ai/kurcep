@@ -7,75 +7,103 @@ import java.util.Calendar;
 
 final class RateStore {
     private static final String PREFS = "rates";
+    private static final String REFRESH_SEQUENCE = "refresh_sequence";
+    private static final String REFRESH_ID = "refresh_id";
+    private static final Object LOCK = new Object();
 
-    static void save(Context context, RateData data) {
-        save(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE), data);
+    static long nextRefreshId(Context context) {
+        return nextRefreshId(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE));
     }
 
-    static void save(SharedPreferences prefs, RateData data) {
-        SharedPreferences.Editor editor = prefs.edit();
-        if (prefs.contains("updated") && !sameDay(prefs.getLong("updated", 0), data.updatedAt)) {
-            editor.putLong("previous_usd", prefs.getLong("usd", 0));
-            editor.putLong("previous_eur", prefs.getLong("eur", 0));
-            editor.putLong("previous_gold", prefs.getLong("gold", 0));
-            editor.putLong("previous_brent", prefs.getLong("brent", 0));
-            editor.putLong("previous_updated", prefs.getLong("updated", 0));
-        }
-        editor
-                .putLong("usd", Double.doubleToRawLongBits(data.usdTry))
-                .putLong("eur", Double.doubleToRawLongBits(data.eurTry))
-                .putLong("gold", Double.doubleToRawLongBits(data.gramGoldTry))
-                .putLong("brent", Double.doubleToRawLongBits(data.brentUsd))
-                .putLong("updated", data.updatedAt)
-                .apply();
-        if (!Double.isNaN(data.usdDailyChange) || !Double.isNaN(data.eurDailyChange)
-                || !Double.isNaN(data.goldDailyChange)) {
-            prefs.edit()
-                    .putLong("daily_usd", Double.doubleToRawLongBits(data.usdDailyChange))
-                    .putLong("daily_eur", Double.doubleToRawLongBits(data.eurDailyChange))
-                    .putLong("daily_gold", Double.doubleToRawLongBits(data.goldDailyChange))
-                    .apply();
-        }
-        if (!Double.isNaN(data.brentDailyChange)) {
-            prefs.edit()
-                    .putLong("daily_brent", Double.doubleToRawLongBits(data.brentDailyChange))
-                    .apply();
+    static long nextRefreshId(SharedPreferences prefs) {
+        synchronized (LOCK) {
+            long previous = prefs.getLong(REFRESH_SEQUENCE, 0L);
+            long now = System.currentTimeMillis();
+            long next = previous == Long.MAX_VALUE
+                    ? Long.MAX_VALUE : Math.max(now, previous + 1);
+            if (!prefs.edit().putLong(REFRESH_SEQUENCE, next).commit()) {
+                throw new IllegalStateException("Refresh sırası kaydedilemedi");
+            }
+            return next;
         }
     }
 
-    static RateData load(Context context) {
+    static boolean save(Context context, RateSnapshot data) {
+        return saveIfNewer(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE), data);
+    }
+
+    static boolean save(SharedPreferences prefs, RateSnapshot data) {
+        return saveIfNewer(prefs, data);
+    }
+
+    static boolean saveIfNewer(SharedPreferences prefs, RateSnapshot data) {
+        synchronized (LOCK) {
+            if (prefs.contains(REFRESH_ID)
+                    && data.refreshId <= prefs.getLong(REFRESH_ID, 0L)) {
+                return false;
+            }
+
+            SharedPreferences.Editor editor = prefs.edit();
+            if (prefs.contains("updated") && !sameDay(prefs.getLong("updated", 0), data.updatedAt)) {
+                editor.putLong("previous_usd", prefs.getLong("usd", 0));
+                editor.putLong("previous_eur", prefs.getLong("eur", 0));
+                editor.putLong("previous_gold", prefs.getLong("gold", 0));
+                editor.putLong("previous_brent", prefs.getLong("brent", 0));
+                editor.putLong("previous_updated", prefs.getLong("updated", 0));
+            }
+            editor
+                    .putLong("usd", Double.doubleToRawLongBits(data.usdTry.value))
+                    .putLong("eur", Double.doubleToRawLongBits(data.eurTry.value))
+                    .putLong("gold", Double.doubleToRawLongBits(data.gramGoldTry.value))
+                    .putLong("brent", Double.doubleToRawLongBits(data.brentUsd.value))
+                    .putLong(REFRESH_ID, data.refreshId)
+                    .putLong("updated", data.updatedAt);
+            writeDailyChange(editor, "daily_usd", data.usdTry.dailyChange);
+            writeDailyChange(editor, "daily_eur", data.eurTry.dailyChange);
+            writeDailyChange(editor, "daily_gold", data.gramGoldTry.dailyChange);
+            writeDailyChange(editor, "daily_brent", data.brentUsd.dailyChange);
+            editor.apply();
+            return true;
+        }
+    }
+
+    static RateSnapshot load(Context context) {
         return load(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE));
     }
 
-    static RateData load(SharedPreferences prefs) {
+    static RateSnapshot load(SharedPreferences prefs) {
         if (!prefs.contains("updated")) return null;
         double usd = Double.longBitsToDouble(prefs.getLong("usd", 0));
         double eur = Double.longBitsToDouble(prefs.getLong("eur", 0));
         double gold = Double.longBitsToDouble(prefs.getLong("gold", 0));
         double brent = prefs.contains("brent")
                 ? Double.longBitsToDouble(prefs.getLong("brent", 0)) : Double.NaN;
-        double previousUsd = prefs.contains("previous_updated")
-                ? Double.longBitsToDouble(prefs.getLong("previous_usd", 0)) : Double.NaN;
-        double previousEur = prefs.contains("previous_updated")
-                ? Double.longBitsToDouble(prefs.getLong("previous_eur", 0)) : Double.NaN;
-        double previousGold = prefs.contains("previous_updated")
-                ? Double.longBitsToDouble(prefs.getLong("previous_gold", 0)) : Double.NaN;
-        double previousBrent = prefs.contains("previous_updated")
-                ? Double.longBitsToDouble(prefs.getLong("previous_brent", 0)) : Double.NaN;
-        double dailyUsd = prefs.contains("daily_usd")
-                ? Double.longBitsToDouble(prefs.getLong("daily_usd", 0))
-                : RateMath.percentChange(usd, previousUsd);
-        double dailyEur = prefs.contains("daily_eur")
-                ? Double.longBitsToDouble(prefs.getLong("daily_eur", 0))
-                : RateMath.percentChange(eur, previousEur);
-        double dailyGold = prefs.contains("daily_gold")
-                ? Double.longBitsToDouble(prefs.getLong("daily_gold", 0))
-                : RateMath.percentChange(gold, previousGold);
-        double dailyBrent = prefs.contains("daily_brent")
-                ? Double.longBitsToDouble(prefs.getLong("daily_brent", 0))
-                : RateMath.percentChange(brent, previousBrent);
-        return new RateData(usd, eur, gold, dailyUsd, dailyEur, dailyGold,
-                brent, dailyBrent, prefs.getLong("updated", 0));
+        double dailyUsd = readDailyChange(prefs, "daily_usd");
+        double dailyEur = readDailyChange(prefs, "daily_eur");
+        double dailyGold = readDailyChange(prefs, "daily_gold");
+        double dailyBrent = readDailyChange(prefs, "daily_brent");
+        long updatedAt = prefs.getLong("updated", 0);
+        long refreshId = prefs.getLong(REFRESH_ID, updatedAt);
+        return new RateSnapshot(
+                new RateQuote(usd, dailyUsd),
+                new RateQuote(eur, dailyEur),
+                new RateQuote(gold, dailyGold),
+                new RateQuote(brent, dailyBrent),
+                updatedAt,
+                refreshId);
+    }
+
+    private static void writeDailyChange(SharedPreferences.Editor editor, String key, double value) {
+        if (Double.isNaN(value)) {
+            editor.remove(key);
+        } else {
+            editor.putLong(key, Double.doubleToRawLongBits(value));
+        }
+    }
+
+    private static double readDailyChange(SharedPreferences prefs, String key) {
+        return prefs.contains(key)
+                ? Double.longBitsToDouble(prefs.getLong(key, 0)) : Double.NaN;
     }
 
     private static boolean sameDay(long first, long second) {

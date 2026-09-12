@@ -21,3 +21,24 @@ The `release` build enables R8 shrinking and resource shrinking. A production-si
 For a signed release, provide the Gradle properties `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` through a local untracked `~/.gradle/gradle.properties` file or CI secrets.
 
 The widget renders cached data immediately and queues a unique, network-constrained WorkManager job for the refresh. This keeps the work recoverable if the app process is reclaimed while the APIs are running. OEM battery optimization may still delay the system's 30-minute widget refresh interval.
+
+## Architecture and verification
+
+`RateRepository` coordinates one single-flight refresh through dedicated FX, gold, Brent,
+JSON, and HTTP source classes. Results are represented as an immutable `RateSnapshot` made
+of `RateQuote` values, then persisted atomically with a monotonic refresh ID. Optional source
+failures are represented as `RateQuote.Status.UNAVAILABLE`, separately from a missing daily
+change. UI and widget formatting share the same pure-Java formatter.
+
+Run the local quality gates with:
+
+```bash
+./gradlew clean test lint assembleDebug assembleRelease jacocoTestDebugUnitTestCoverageVerification
+```
+
+The JVM tests run with Android default stubs disabled, and the deterministic domain/network
+coverage gate requires at least 60% line coverage. CI additionally runs secret scanning,
+CodeQL, dependency review, and Dependabot updates.
+
+The manual/tag-triggered `Release package` workflow produces unsigned AAB/APK artifacts. A
+production-signed package still requires the release keystore properties described above.

@@ -10,9 +10,6 @@ import android.os.Bundle;
 import android.widget.RemoteViews;
 
 import java.text.NumberFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 
 public class RatesWidgetProvider extends AppWidgetProvider {
     private static final String ACTION_REFRESH = "com.kurcep.app.REFRESH_WIDGET";
@@ -41,7 +38,7 @@ public class RatesWidgetProvider extends AppWidgetProvider {
     }
 
     private static void render(Context context, AppWidgetManager manager, int[] ids,
-                               RateData data, boolean loading) {
+                               RateSnapshot data, boolean loading) {
         NumberFormat format = Formatters.currency();
         for (int id : ids) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_rates);
@@ -57,20 +54,21 @@ public class RatesWidgetProvider extends AppWidgetProvider {
                 views.setTextViewText(R.id.widget_updated, context.getString(
                         loading ? R.string.updating : R.string.tap_to_refresh));
             } else {
-                views.setTextViewText(R.id.widget_usd, "₺" + format.format(data.usdTry));
-                views.setTextViewText(R.id.widget_eur, "₺" + format.format(data.eurTry));
-                views.setTextViewText(R.id.widget_gold, "₺" + format.format(data.gramGoldTry));
-                setChange(views, R.id.widget_usd_change, data.usdDailyChange, context);
-                setChange(views, R.id.widget_eur_change, data.eurDailyChange, context);
-                setChange(views, R.id.widget_gold_change, data.goldDailyChange, context);
-                views.setTextViewText(R.id.widget_brent, Double.isNaN(data.brentUsd)
-                        ? "—" : "$" + format.format(data.brentUsd));
-                setChange(views, R.id.widget_brent_change, data.brentDailyChange, context);
-                String time = new SimpleDateFormat("HH:mm", new Locale("tr", "TR"))
-                        .format(new Date(data.updatedAt));
+                views.setTextViewText(R.id.widget_usd, "₺" + format.format(data.usdTry.value));
+                views.setTextViewText(R.id.widget_eur, "₺" + format.format(data.eurTry.value));
+                views.setTextViewText(R.id.widget_gold,
+                        "₺" + format.format(data.gramGoldTry.value));
+                setChange(views, R.id.widget_usd_change, data.usdTry, context);
+                setChange(views, R.id.widget_eur_change, data.eurTry, context);
+                setChange(views, R.id.widget_gold_change,
+                        data.gramGoldTry, context);
+                views.setTextViewText(R.id.widget_brent, !data.brentUsd.isAvailable()
+                        ? "—" : "$" + format.format(data.brentUsd.value));
+                setChange(views, R.id.widget_brent_change, data.brentUsd, context);
                 views.setTextViewText(R.id.widget_updated, loading
                         ? context.getString(R.string.updating)
-                        : context.getString(R.string.widget_updated, time));
+                        : context.getString(R.string.widget_updated,
+                        RateDisplayFormatter.time(data.updatedAt)));
             }
 
             Intent refresh = new Intent(context, RatesWidgetProvider.class).setAction(ACTION_REFRESH);
@@ -86,14 +84,15 @@ public class RatesWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    private static void setChange(RemoteViews views, int viewId, double change, Context context) {
-        if (Double.isNaN(change)) {
-            views.setTextViewText(viewId, "—");
-            return;
+    private static void setChange(RemoteViews views, int viewId,
+                                  RateQuote quote, Context context) {
+        if (!quote.hasDailyChange()) {
+            views.setTextColor(viewId, context.getColor(R.color.muted));
+        } else {
+            boolean up = quote.dailyChange >= 0;
+            views.setTextColor(viewId, context.getColor(up ? R.color.change_up : R.color.change_down));
         }
-        boolean up = change >= 0;
         NumberFormat format = Formatters.currency();
-        views.setTextViewText(viewId, (up ? "↑ " : "↓ ") + format.format(Math.abs(change)) + "%");
-        views.setTextColor(viewId, context.getColor(up ? R.color.change_up : R.color.change_down));
+        views.setTextViewText(viewId, RateDisplayFormatter.change(format, quote));
     }
 }

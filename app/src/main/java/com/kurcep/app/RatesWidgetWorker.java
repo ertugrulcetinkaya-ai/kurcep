@@ -13,7 +13,6 @@ import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public final class RatesWidgetWorker extends Worker {
@@ -33,42 +32,41 @@ public final class RatesWidgetWorker extends Worker {
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
                 .build();
         WorkManager.getInstance(context.getApplicationContext()).enqueueUniqueWork(
-                UNIQUE_WORK, ExistingWorkPolicy.REPLACE, request);
+                UNIQUE_WORK, ExistingWorkPolicy.KEEP, request);
     }
 
     @Override
     public Result doWork() {
         Context context = getApplicationContext();
-        CountDownLatch completed = new CountDownLatch(1);
-        boolean[] successful = {false};
-        RateRepository.fetch(new RateRepository.Callback() {
-            @Override public void onSuccess(RateData data) {
-                RateStore.save(context, data);
-                RatesWidgetProvider.updateAll(context,
-                        android.appwidget.AppWidgetManager.getInstance(context),
-                        new ComponentName(context, RatesWidgetProvider.class));
-                successful[0] = true;
-                completed.countDown();
-            }
-
-            @Override public void onError(Exception error) {
-                Log.w(TAG, "Widget güncellemesi başarısız", error);
-                RatesWidgetProvider.updateAll(context,
-                        android.appwidget.AppWidgetManager.getInstance(context),
-                        new ComponentName(context, RatesWidgetProvider.class));
-                completed.countDown();
-            }
-        });
-
+        RefreshCoordinator coordinator = ((KurCepApplication) context).getRefreshCoordinator();
         try {
-            if (!completed.await(3, TimeUnit.MINUTES)) {
-                Log.w(TAG, "Widget güncellemesi zaman aşımına uğradı");
-                return Result.retry();
+            coordinator.refreshBlocking(context);
+            if (isStopped()) {
+                return Result.failure();
             }
+            RatesWidgetProvider.updateAll(context,
+                    android.appwidget.AppWidgetManager.getInstance(context),
+                    new ComponentName(context, RatesWidgetProvider.class));
+            return Result.success();
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            return Result.retry();
+            return Result.failure();
+        } catch (Exception error) {
+            Log.w(TAG, "Widget güncellemesi başarısız", error);
+            RatesWidgetProvider.updateAll(context,
+                    android.appwidget.AppWidgetManager.getInstance(context),
+                    new ComponentName(context, RatesWidgetProvider.class));
+            if (isRetryable(error) && getRunAttemptCount() < 3) {
+                return Result.retry();
+            }
+            return Result.failure();
         }
-        return successful[0] ? Result.success() : Result.retry();
+    }
+
+    private static boolean isRetryable(Exception error) {
+        if (error instanceof RateHttpException) {
+            return ((RateHttpException) error).isRetryable();
+        }
+        return error instanceof TransientRateException;
     }
 }
