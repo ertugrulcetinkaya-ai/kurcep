@@ -64,7 +64,7 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core:1.15.0")
+    implementation("androidx.core:core:1.19.0")
     implementation("androidx.work:work-runtime:2.11.2")
     testImplementation("junit:junit:4.13.2")
     // android.jar ships org.json stubs that cannot parse; local unit tests need the real library.
