@@ -4,7 +4,21 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # AndroidX libraries usually need to move together (shared compileSdk requirements).
+      androidx:
+        patterns:
+          - "androidx.*"
+      # AGP and the Gradle wrapper have coupled minimum-version requirements.
+      build-tooling:
+        patterns:
+          - "com.android.*"
+          - "gradle-wrapper"
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
