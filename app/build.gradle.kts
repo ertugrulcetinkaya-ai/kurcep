@@ -16,7 +16,7 @@ val hasReleaseSigning = listOf(
 
 android {
     namespace = "com.kurcep.app"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.kurcep.app"
