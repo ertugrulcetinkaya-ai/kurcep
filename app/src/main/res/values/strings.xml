@@ -8,8 +8,8 @@
     <string name="lira_value">₺%1$s</string>
     <string name="usd_value">$%1$s</string>
     <string name="daily_change">%1$s %2$s%%</string>
-    <string name="last_updated">Son güncelleme %1$s • Döviz: ExchangeRate-API</string>
-    <string name="widget_updated">%1$s • ExchangeRate-API</string>
+    <string name="last_updated">Veri saati %1$s • Kaynak: %2$s</string>
+    <string name="widget_updated">%1$s • %2$s</string>
     <string name="updating">Güncelleniyor…</string>
     <string name="no_data">Henüz veri yok</string>
     <string name="update_failed">Güncelleme başarısız. İnternet bağlantını kontrol et.</string>

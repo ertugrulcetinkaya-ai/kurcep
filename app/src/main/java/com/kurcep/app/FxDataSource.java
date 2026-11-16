@@ -20,6 +20,12 @@ final class FxDataSource {
         return client.getJson(previousUrl(date));
     }
 
+    /** ExchangeRate-API's own update time in epoch millis, or 0 when absent. */
+    static long dataTime(JSONObject current) {
+        long seconds = current.optLong("time_last_update_unix", 0L);
+        return seconds > 0 ? seconds * 1000L : 0L;
+    }
+
     static String previousUrl(String date) {
         return "https://api.frankfurter.dev/v1/" + date + "?from=USD&to=TRY,EUR";
     }

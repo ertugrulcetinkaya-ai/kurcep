@@ -39,6 +39,46 @@ public class RateStoreTest {
     }
 
     @Test
+    public void savesAndLoadsBuySellDataTimeAndSource() {
+        SharedPreferences prefs = inMemoryPreferences();
+        long now = System.currentTimeMillis();
+        RateSnapshot input = new RateSnapshot(
+                new RateQuote(50.3983, 0.05, 50.3864, 50.3983),
+                new RateQuote(55.5319, -0.05, 55.5268, 55.5319),
+                new RateQuote(6275.68, -0.08, 6274.91, 6275.68),
+                new RateQuote(78.42, 0.85),
+                now, now, now - 60_000L, RateSnapshot.Source.TRUNCGIL);
+
+        RateStore.save(prefs, input);
+        RateSnapshot output = RateStore.load(prefs);
+
+        assertEquals(RateSnapshot.Source.TRUNCGIL, output.source);
+        assertEquals(now - 60_000L, output.dataAt);
+        assertEquals(now - 60_000L, output.displayTime());
+        assertEquals(50.3864, output.usdTry.buying, 1e-9);
+        assertEquals(50.3983, output.usdTry.selling, 1e-9);
+        assertEquals(55.5268, output.eurTry.buying, 1e-9);
+        assertEquals(6275.68, output.gramGoldTry.selling, 1e-9);
+        assertTrue(output.usdTry.hasBuySell());
+        assertTrue(!output.brentUsd.hasBuySell());
+    }
+
+    @Test
+    public void legacyCacheWithoutSourceFallsBackToFetchTime() {
+        SharedPreferences prefs = inMemoryPreferences();
+        long now = System.currentTimeMillis();
+        RateStore.save(prefs, snapshot(40, 44, 2500, 1, 1, 1, 78, 1, now));
+
+        RateSnapshot output = RateStore.load(prefs);
+
+        assertEquals(RateSnapshot.Source.FALLBACK, output.source);
+        assertEquals(now, output.displayTime());
+        assertTrue(!output.usdTry.hasBuySell());
+        assertEquals(RateSnapshot.Source.FALLBACK, RateStore.readSource("BILINMEYEN"));
+        assertEquals(RateSnapshot.Source.FALLBACK, RateStore.readSource(null));
+    }
+
+    @Test
     public void doesNotDeriveDailyChangeFromAnUnverifiedPreviousSnapshot() {
         SharedPreferences prefs = inMemoryPreferences();
         long previousDay = System.currentTimeMillis() - 2 * 24 * 60 * 60 * 1000L;
@@ -163,6 +203,10 @@ public class RateStoreTest {
                 new Class[]{SharedPreferences.class}, (proxy, method, args) -> {
                     String name = method.getName();
                     if (name.equals("contains")) return values.containsKey(args[0]);
+                    if (name.equals("getString")) {
+                        Object value = values.get(args[0]);
+                        return value == null ? args[1] : value;
+                    }
                     if (name.equals("getLong")) {
                         Object value = values.get(args[0]);
                         return value == null ? args[1] : value;

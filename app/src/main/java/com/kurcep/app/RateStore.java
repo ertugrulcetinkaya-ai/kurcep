@@ -31,6 +31,8 @@ final class RateStore {
                     .putLong("brent", Double.doubleToRawLongBits(data.brentUsd.value))
                     .putLong(REFRESH_ID, data.refreshId)
                     .putLong("updated", data.updatedAt)
+                    .putLong("data_at", data.dataAt)
+                    .putString("source", data.source.name())
                     // Remove the legacy derived-snapshot cache during migration. Daily
                     // changes now come only from the current refresh result.
                     .remove("previous_usd")
@@ -42,6 +44,12 @@ final class RateStore {
             writeDailyChange(editor, "daily_eur", data.eurTry.dailyChange);
             writeDailyChange(editor, "daily_gold", data.gramGoldTry.dailyChange);
             writeDailyChange(editor, "daily_brent", data.brentUsd.dailyChange);
+            writeDailyChange(editor, "buy_usd", data.usdTry.buying);
+            writeDailyChange(editor, "sell_usd", data.usdTry.selling);
+            writeDailyChange(editor, "buy_eur", data.eurTry.buying);
+            writeDailyChange(editor, "sell_eur", data.eurTry.selling);
+            writeDailyChange(editor, "buy_gold", data.gramGoldTry.buying);
+            writeDailyChange(editor, "sell_gold", data.gramGoldTry.selling);
             editor.apply();
             return true;
         }
@@ -64,15 +72,31 @@ final class RateStore {
         double dailyBrent = readDailyChange(prefs, "daily_brent");
         long updatedAt = prefs.getLong("updated", 0);
         long refreshId = prefs.getLong(REFRESH_ID, updatedAt);
+        long dataAt = prefs.getLong("data_at", 0L);
         return new RateSnapshot(
-                new RateQuote(usd, dailyUsd),
-                new RateQuote(eur, dailyEur),
-                new RateQuote(gold, dailyGold),
+                new RateQuote(usd, dailyUsd, readDailyChange(prefs, "buy_usd"),
+                        readDailyChange(prefs, "sell_usd")),
+                new RateQuote(eur, dailyEur, readDailyChange(prefs, "buy_eur"),
+                        readDailyChange(prefs, "sell_eur")),
+                new RateQuote(gold, dailyGold, readDailyChange(prefs, "buy_gold"),
+                        readDailyChange(prefs, "sell_gold")),
                 new RateQuote(brent, dailyBrent),
                 updatedAt,
-                refreshId);
+                refreshId,
+                dataAt,
+                readSource(prefs.getString("source", null)));
     }
 
+    static RateSnapshot.Source readSource(String name) {
+        if (name != null) {
+            for (RateSnapshot.Source source : RateSnapshot.Source.values()) {
+                if (source.name().equals(name)) return source;
+            }
+        }
+        return RateSnapshot.Source.FALLBACK;
+    }
+
+    /** Stores an optional double; NaN removes the key so it reads back as NaN. */
     private static void writeDailyChange(SharedPreferences.Editor editor, String key, double value) {
         if (Double.isNaN(value)) {
             editor.remove(key);
