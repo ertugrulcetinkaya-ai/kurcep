@@ -6,7 +6,19 @@ Native Android app and home-screen widget showing USD/TRY, EUR/TRY, and estimate
 
 Open this folder in Android Studio, allow Gradle sync, then run the `app` configuration on an Android 7.0+ device or emulator. Add the widget by long-pressing the home screen and choosing **Widgets → KurCep**.
 
-No API key is required. Current currency rates use ExchangeRate-API. Gram gold is derived from the XAU/USD spot price supplied by Gold API and USD/TRY. Daily currency changes use Frankfurter's previous-day reference rates; daily gold changes use the previous daily close from XAUS and the previous USD/TRY reference rate. These services are public, unauthenticated dependencies and all values are indicative, not trading quotes.
+No API key is required. Currency and gold data come from the Turkish market feed
+[Truncgil Finans](https://finans.truncgil.com/v4/today.json): intraday USD/TRY, EUR/TRY and gram
+gold with buy/sell quotes and daily change, in one request. The app headlines the selling price
+and shows buy/sell on the main screen.
+
+If that feed fails, returns an invalid schema, or is older than 3 days, the app falls back to the
+global sources: [ExchangeRate-API](https://www.exchangerate-api.com) (USD/TRY, EUR/TRY, updated once
+daily), Gold API spot XAU/USD for gram gold, and Frankfurter / XAUS for daily changes. Brent is
+always read from Yahoo Finance and is optional.
+
+The main screen and widget show the **provider's data time and source** (for example
+`Veri saati 18:17 • Kaynak: Truncgil Finans`), not merely when the app fetched, so stale fallback
+data is visibly stale. All values are indicative, not trading quotes.
 
 ## Build
 
@@ -25,7 +37,7 @@ The widget renders cached data immediately and queues a unique, network-constrai
 ## Architecture and verification
 
 `RefreshCoordinator` coordinates one single-flight refresh through `RateRepository` and its
-dedicated FX, gold, Brent, JSON, and HTTP source classes. Results are represented as an immutable `RateSnapshot` made
+dedicated Turkish-market, FX, gold, Brent, JSON, and HTTP source classes. Results are represented as an immutable `RateSnapshot` made
 of `RateQuote` values, then persisted atomically with a monotonic refresh ID. Optional source
 failures are represented as `RateQuote.Status.UNAVAILABLE`, separately from a missing daily
 change. UI and widget formatting share the same pure-Java formatter.

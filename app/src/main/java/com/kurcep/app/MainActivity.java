@@ -17,6 +17,7 @@ import java.text.NumberFormat;
 
 public class MainActivity extends Activity {
     private final NumberFormat currency = Formatters.currency();
+    private final NumberFormat precise = Formatters.precise();
     private TextView usdValue;
     private TextView eurValue;
     private TextView goldValue;
@@ -25,6 +26,9 @@ public class MainActivity extends Activity {
     private TextView eurChange;
     private TextView goldChange;
     private TextView brentChange;
+    private TextView usdBuySell;
+    private TextView eurBuySell;
+    private TextView goldBuySell;
     private TextView updatedValue;
     private View refreshButton;
     private long activeUiRefreshId;
@@ -44,6 +48,9 @@ public class MainActivity extends Activity {
         goldChange = findViewById(R.id.gold_change);
         brentValue = findViewById(R.id.brent_value);
         brentChange = findViewById(R.id.brent_change);
+        usdBuySell = findViewById(R.id.usd_buy_sell);
+        eurBuySell = findViewById(R.id.eur_buy_sell);
+        goldBuySell = findViewById(R.id.gold_buy_sell);
         updatedValue = findViewById(R.id.updated_value);
         refreshButton = findViewById(R.id.refresh_button);
         refreshButton.setOnClickListener(v -> refresh());
@@ -131,8 +138,17 @@ public class MainActivity extends Activity {
         showChange(eurChange, data.eurTry);
         showChange(goldChange, data.gramGoldTry);
         showChange(brentChange, data.brentUsd);
+        showBuySell(usdBuySell, RateDisplayFormatter.buySell(precise, data.usdTry));
+        showBuySell(eurBuySell, RateDisplayFormatter.buySell(precise, data.eurTry));
+        showBuySell(goldBuySell, RateDisplayFormatter.buySell(currency, data.gramGoldTry));
         updatedValue.setText(getString(R.string.last_updated,
-                RateDisplayFormatter.time(data.updatedAt)));
+                RateDisplayFormatter.dataTime(data.displayTime(), System.currentTimeMillis()),
+                RateDisplayFormatter.sourceName(data.source)));
+    }
+
+    private static void showBuySell(TextView view, String text) {
+        view.setText(text);
+        view.setVisibility(text == null ? View.GONE : View.VISIBLE);
     }
 
     private void showChange(TextView view, RateQuote quote) {

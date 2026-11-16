@@ -11,5 +11,13 @@ final class Formatters {
         return format;
     }
 
+    /** Four decimals, as Turkish FX boards quote buy/sell prices. */
+    static NumberFormat precise() {
+        NumberFormat format = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
+        format.setMinimumFractionDigits(4);
+        format.setMaximumFractionDigits(4);
+        return format;
+    }
+
     private Formatters() {}
 }

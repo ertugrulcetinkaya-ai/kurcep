@@ -25,11 +25,13 @@ final class RateRepository implements RefreshDataLoader {
     static final String GOLD_URL = GoldDataSource.CURRENT_URL;
     static final String GOLD_HISTORY_URL = GoldDataSource.HISTORY_URL;
     static final String BRENT_URL = BrentDataSource.URL;
+    static final String MARKET_URL = TruncgilDataSource.URL;
     static final double GRAMS_PER_TROY_OUNCE = 31.1034768;
     static final int MAX_RESPONSE_BYTES = RateJsonClient.MAX_RESPONSE_BYTES;
-    private static final int NETWORK_THREADS = 5;
+    private static final int NETWORK_THREADS = 6;
 
     private final RateJsonClient jsonClient;
+    private final TruncgilDataSource marketSource;
     private final FxDataSource fxSource;
     private final GoldDataSource goldSource;
     private final BrentDataSource brentSource;
@@ -47,6 +49,7 @@ final class RateRepository implements RefreshDataLoader {
     RateRepository(RateTransport transport, ExecutorService networkExecutor,
                    RateDiagnostics diagnostics) {
         this.jsonClient = new RateJsonClient(Objects.requireNonNull(transport, "transport"));
+        this.marketSource = new TruncgilDataSource(jsonClient);
         this.fxSource = new FxDataSource(jsonClient);
         this.goldSource = new GoldDataSource(jsonClient);
         this.brentSource = new BrentDataSource(jsonClient);
@@ -65,46 +68,75 @@ final class RateRepository implements RefreshDataLoader {
 
     @Override
     public RateSnapshot loadRates(long refreshId) throws Exception {
-        String yesterday = yesterday();
         List<Future<?>> requests = new ArrayList<>(NETWORK_THREADS);
-        Future<JSONObject> fxFuture = submit(requests, fxSource::current);
-        Future<JSONObject> goldFuture = submit(requests, goldSource::current);
+        // Primary path: one Turkish market request; Brent is independent and runs alongside.
+        Future<JSONObject> marketFuture = submit(requests, marketSource::current);
         Future<RateQuote> brentFuture = submit(requests, this::fetchBrent);
-        Future<JSONObject> previousFxFuture = submit(requests, () -> fxSource.previous(yesterday));
-        Future<JSONObject> goldHistoryFuture = submit(requests, goldSource::history);
         boolean successful = false;
 
         try {
-            JSONObject rates = requiredObject(await(fxFuture), "rates");
-            double usdTry = requiredPositive(rates, "TRY");
-            double usdPerEur = requiredPositive(rates, "EUR");
-            double eurTry = requirePositive(usdTry / usdPerEur, "EUR/TRY");
-
-            double goldUsdPerOunce = requiredPositive(await(goldFuture), "price");
-            double gramGoldTry = requirePositive(
-                    goldUsdPerOunce * usdTry / GRAMS_PER_TROY_OUNCE, "gram gold TRY");
-
-            JSONObject previousFx = awaitOptional(previousFxFuture, "Döviz geçmiş verisi");
-            JSONObject goldHistory = awaitOptional(goldHistoryFuture, "Altın geçmiş verisi");
-            double[] currencyChanges = calculateCurrencyDailyChange(
-                    usdTry, eurTry, previousFx);
-            double dailyGoldChange = calculateGoldDailyChange(
-                    gramGoldTry, previousFx, goldHistory, yesterday);
+            MarketRates market = loadMarketRates(requests, marketFuture);
             RateQuote brent = await(brentFuture);
 
             successful = true;
             return new RateSnapshot(
-                    new RateQuote(usdTry, currencyChanges[0]),
-                    new RateQuote(eurTry, currencyChanges[1]),
-                    new RateQuote(gramGoldTry, dailyGoldChange),
+                    market.usdTry,
+                    market.eurTry,
+                    market.gramGoldTry,
                     brent,
                     System.currentTimeMillis(),
-                    refreshId);
+                    refreshId,
+                    market.dataAt,
+                    market.source);
         } finally {
             if (!successful) {
                 cancelAll(requests);
             }
         }
+    }
+
+    private MarketRates loadMarketRates(List<Future<?>> requests,
+                                        Future<JSONObject> marketFuture) throws Exception {
+        try {
+            return TruncgilDataSource.parse(await(marketFuture), System.currentTimeMillis());
+        } catch (InterruptedException error) {
+            throw error;
+        } catch (Exception error) {
+            diagnostics.warn("Truncgil verisi kullanılamadı, yedek kaynaklara geçiliyor", error);
+            return loadFallbackRates(requests);
+        }
+    }
+
+    /** Global sources: daily FX, spot gold, and separate history endpoints for changes. */
+    private MarketRates loadFallbackRates(List<Future<?>> requests) throws Exception {
+        String yesterday = yesterday();
+        Future<JSONObject> fxFuture = submit(requests, fxSource::current);
+        Future<JSONObject> goldFuture = submit(requests, goldSource::current);
+        Future<JSONObject> previousFxFuture = submit(requests, () -> fxSource.previous(yesterday));
+        Future<JSONObject> goldHistoryFuture = submit(requests, goldSource::history);
+
+        JSONObject fx = await(fxFuture);
+        JSONObject rates = requiredObject(fx, "rates");
+        double usdTry = requiredPositive(rates, "TRY");
+        double usdPerEur = requiredPositive(rates, "EUR");
+        double eurTry = requirePositive(usdTry / usdPerEur, "EUR/TRY");
+
+        double goldUsdPerOunce = requiredPositive(await(goldFuture), "price");
+        double gramGoldTry = requirePositive(
+                goldUsdPerOunce * usdTry / GRAMS_PER_TROY_OUNCE, "gram gold TRY");
+
+        JSONObject previousFx = awaitOptional(previousFxFuture, "Döviz geçmiş verisi");
+        JSONObject goldHistory = awaitOptional(goldHistoryFuture, "Altın geçmiş verisi");
+        double[] currencyChanges = calculateCurrencyDailyChange(usdTry, eurTry, previousFx);
+        double dailyGoldChange = calculateGoldDailyChange(
+                gramGoldTry, previousFx, goldHistory, yesterday);
+
+        return new MarketRates(
+                new RateQuote(usdTry, currencyChanges[0]),
+                new RateQuote(eurTry, currencyChanges[1]),
+                new RateQuote(gramGoldTry, dailyGoldChange),
+                FxDataSource.dataTime(fx),
+                RateSnapshot.Source.FALLBACK);
     }
 
     JSONObject getJson(String address) throws Exception {

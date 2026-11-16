@@ -137,6 +137,80 @@ public class RateRepositoryTest {
         assertEquals(RateMath.percentChange(78.42, 78.12), data.brentUsd.dailyChange, 1e-9);
         assertTrue(data.updatedAt >= before && data.updatedAt <= after);
         assertEquals(42L, data.refreshId);
+        assertEquals(RateSnapshot.Source.FALLBACK, data.source);
+    }
+
+    @Test
+    public void usesTurkishMarketFeedWithoutCallingFallbackSources() throws Exception {
+        long now = System.currentTimeMillis();
+        String updateDate = TruncgilDataSourceTest.istanbulTime(now - 60_000L);
+        Map<String, Integer> calls = new ConcurrentHashMap<>();
+        useFakeTransport(address -> {
+            calls.merge(address, 1, Integer::sum);
+            if (address.equals(RateRepository.MARKET_URL)) {
+                return new RateTransport.Response(200, TruncgilDataSourceTest.body(updateDate));
+            }
+            if (address.equals(RateRepository.BRENT_URL)) {
+                return new RateTransport.Response(200,
+                        "{\"chart\":{\"result\":[{\"meta\":{\"regularMarketPrice\":78.42},"
+                                + "\"indicators\":{\"quote\":[{\"close\":[78.12,78.42]}]}}]}}");
+            }
+            throw new IllegalStateException("Yedek kaynak çağrılmamalıydı: " + address);
+        });
+
+        RateSnapshot data = repository.loadRates(50L);
+
+        assertEquals(RateSnapshot.Source.TRUNCGIL, data.source);
+        assertEquals(50.3983, data.usdTry.value, 1e-9);
+        assertEquals(50.3864, data.usdTry.buying, 1e-9);
+        assertEquals(55.5319, data.eurTry.value, 1e-9);
+        assertEquals(6275.68, data.gramGoldTry.value, 1e-9);
+        assertEquals(-0.08, data.gramGoldTry.dailyChange, 1e-9);
+        assertEquals(78.42, data.brentUsd.value, 1e-9);
+        assertTrue(data.dataAt > 0 && data.dataAt <= now);
+        assertEquals(2, calls.size());
+    }
+
+    @Test
+    public void fallsBackToGlobalSourcesWhenMarketFeedFails() throws Exception {
+        verifyFallback(new RateTransport.Response(503, "bakımda"));
+    }
+
+    @Test
+    public void fallsBackToGlobalSourcesWhenMarketFeedIsStale() throws Exception {
+        String stale = TruncgilDataSourceTest.istanbulTime(
+                System.currentTimeMillis() - TruncgilDataSource.MAX_AGE_MS - 3_600_000L);
+        verifyFallback(new RateTransport.Response(200, TruncgilDataSourceTest.body(stale)));
+    }
+
+    private void verifyFallback(RateTransport.Response marketResponse) throws Exception {
+        String yesterday = yesterdayIso();
+        Map<String, RateTransport.Response> responses = new HashMap<>();
+        responses.put(RateRepository.MARKET_URL, marketResponse);
+        responses.put(RateRepository.FX_URL, new RateTransport.Response(200,
+                "{\"time_last_update_unix\":1794700952,"
+                        + "\"rates\":{\"TRY\":50.381173,\"EUR\":0.905984}}"));
+        responses.put(RateRepository.GOLD_URL, new RateTransport.Response(200,
+                "{\"price\":3873.75}"));
+        responses.put("https://api.frankfurter.dev/v1/" + yesterday + "?from=USD&to=TRY,EUR",
+                new RateTransport.Response(200, "{\"rates\":{\"TRY\":50.368,\"EUR\":0.90481}}"));
+        responses.put(RateRepository.GOLD_HISTORY_URL, new RateTransport.Response(200,
+                "{\"points\":[{\"d\":\"" + yesterday + "\",\"c\":3862.6}]}"));
+        useFakeTransport(address -> {
+            RateTransport.Response response = responses.get(address);
+            if (response == null) {
+                throw new IOException("çevrimdışı: " + address);
+            }
+            return response;
+        });
+
+        RateSnapshot data = repository.loadRates(51L);
+
+        assertEquals(RateSnapshot.Source.FALLBACK, data.source);
+        assertEquals(50.381173, data.usdTry.value, 1e-9);
+        assertTrue(!data.usdTry.hasBuySell());
+        assertEquals(1_794_700_952_000L, data.dataAt);
+        assertEquals(RateMath.percentChange(50.381173, 50.368), data.usdTry.dailyChange, 1e-9);
     }
 
     @Test
@@ -270,7 +344,8 @@ public class RateRepositoryTest {
 
         repository.loadRates(46L);
 
-        assertEquals(5, calls.size());
+        // Truncgil (unstubbed, fails) + 4 fallback endpoints + Brent.
+        assertEquals(6, calls.size());
         for (Integer count : calls.values()) {
             assertEquals(Integer.valueOf(1), count);
         }

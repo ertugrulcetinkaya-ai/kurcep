@@ -68,7 +68,9 @@ public class RatesWidgetProvider extends AppWidgetProvider {
                 views.setTextViewText(R.id.widget_updated, loading
                         ? context.getString(R.string.updating)
                         : context.getString(R.string.widget_updated,
-                        RateDisplayFormatter.time(data.updatedAt)));
+                        RateDisplayFormatter.dataTime(data.displayTime(),
+                                System.currentTimeMillis()),
+                        RateDisplayFormatter.sourceName(data.source)));
             }
 
             Intent refresh = new Intent(context, RatesWidgetProvider.class).setAction(ACTION_REFRESH);

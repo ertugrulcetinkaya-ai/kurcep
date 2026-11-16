@@ -7,7 +7,8 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="92dp"
+        android:layout_height="wrap_content"
+        android:minHeight="92dp"
         android:background="@drawable/bg_card"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -19,12 +20,14 @@
                 <TextView android:id="@+id/usd_value" style="@style/DollarValue" />
                 <TextView android:id="@+id/usd_change" style="@style/DailyChange" />
             </LinearLayout>
+            <TextView android:id="@+id/usd_buy_sell" style="@style/BuySell" />
         </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="92dp"
+        android:layout_height="wrap_content"
+        android:minHeight="92dp"
         android:layout_marginTop="12dp"
         android:background="@drawable/bg_card"
         android:gravity="center_vertical"
@@ -37,12 +40,14 @@
                 <TextView android:id="@+id/eur_value" style="@style/EuroValue" />
                 <TextView android:id="@+id/eur_change" style="@style/DailyChange" />
             </LinearLayout>
+            <TextView android:id="@+id/eur_buy_sell" style="@style/BuySell" />
         </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="92dp"
+        android:layout_height="wrap_content"
+        android:minHeight="92dp"
         android:layout_marginTop="12dp"
         android:background="@drawable/bg_gold_card"
         android:gravity="center_vertical"
@@ -55,12 +60,14 @@
                 <TextView android:id="@+id/gold_value" style="@style/RateValue" />
                 <TextView android:id="@+id/gold_change" style="@style/DailyChange" />
             </LinearLayout>
+            <TextView android:id="@+id/gold_buy_sell" style="@style/BuySell" />
         </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="92dp"
+        android:layout_height="wrap_content"
+        android:minHeight="92dp"
         android:layout_marginTop="12dp"
         android:background="@drawable/bg_card"
         android:gravity="center_vertical"
