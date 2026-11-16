@@ -4,7 +4,7 @@ Native Android app and home-screen widget showing USD/TRY, EUR/TRY, and estimate
 
 ## Run
 
-Open this folder in Android Studio, allow Gradle sync, then run the `app` configuration on an Android 6.0+ device or emulator. Add the widget by long-pressing the home screen and choosing **Widgets → KurCep**.
+Open this folder in Android Studio, allow Gradle sync, then run the `app` configuration on an Android 7.0+ device or emulator. Add the widget by long-pressing the home screen and choosing **Widgets → KurCep**.
 
 No API key is required. Current currency rates use ExchangeRate-API. Gram gold is derived from the XAU/USD spot price supplied by Gold API and USD/TRY. Daily currency changes use Frankfurter's previous-day reference rates; daily gold changes use the previous daily close from XAUS and the previous USD/TRY reference rate. These services are public, unauthenticated dependencies and all values are indicative, not trading quotes.
 
