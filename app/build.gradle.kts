@@ -16,14 +16,14 @@ val hasReleaseSigning = listOf(
 
 android {
     namespace = "com.kurcep.app"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.kurcep.app"
-        minSdk = 23
-        targetSdk = 35
-        versionCode = 2
-        versionName = "1.2"
+        minSdk = 24
+        targetSdk = 36
+        versionCode = 3
+        versionName = "1.3"
     }
 
     compileOptions {
@@ -64,11 +64,11 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core:1.15.0")
-    implementation("androidx.work:work-runtime:2.11.2")
+    implementation("androidx.core:core:1.19.1")
+    implementation("androidx.work:work-runtime:2.12.0")
     testImplementation("junit:junit:4.13.2")
     // android.jar ships org.json stubs that cannot parse; local unit tests need the real library.
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260814")
 }
 
 jacoco {

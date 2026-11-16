@@ -61,9 +61,12 @@ public class MainActivity extends Activity {
         int baseBottom = root.getPaddingBottom();
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            view.setPadding(baseLeft, baseTop + systemBars.top,
-                    baseRight, baseBottom + systemBars.bottom);
+            // Include side insets too: in landscape the navigation bar and display cutout
+            // sit on the left/right edge and would otherwise cover the rate cards.
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout());
+            view.setPadding(baseLeft + bars.left, baseTop + bars.top,
+                    baseRight + bars.right, baseBottom + bars.bottom);
             return insets;
         });
         ViewCompat.requestApplyInsets(root);

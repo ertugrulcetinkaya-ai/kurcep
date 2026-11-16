@@ -21,6 +21,6 @@ final class FxDataSource {
     }
 
     static String previousUrl(String date) {
-        return "https://api.frankfurter.app/" + date + "?from=USD&to=TRY,EUR";
+        return "https://api.frankfurter.dev/v1/" + date + "?from=USD&to=TRY,EUR";
     }
 }

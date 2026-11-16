@@ -153,7 +153,7 @@ public class RateRepositoryTest {
             if (response != null) {
                 return response;
             }
-            if (address.startsWith("https://api.frankfurter.app/")) {
+            if (address.startsWith("https://api.frankfurter.dev/v1/")) {
                 return new RateTransport.Response(500, "dün veri alınamadı");
             }
             if (address.equals(RateRepository.GOLD_HISTORY_URL)) {
@@ -183,7 +183,7 @@ public class RateRepositoryTest {
                 "{\"rates\":{\"TRY\":" + usdTry + ",\"EUR\":" + eurRate + "}}"));
         responses.put(RateRepository.GOLD_URL, new RateTransport.Response(200, "{\"price\":2340.0}"));
         // The shared previous-FX source fails...
-        responses.put("https://api.frankfurter.app/" + yesterday + "?from=USD&to=TRY,EUR",
+        responses.put("https://api.frankfurter.dev/v1/" + yesterday + "?from=USD&to=TRY,EUR",
                 new RateTransport.Response(500, "dün döviz verisi alınamadı"));
         // ...but the gold history source succeeds. It still cannot produce a
         // percentage without the shared previous FX baseline.
@@ -215,7 +215,7 @@ public class RateRepositoryTest {
         responses.put(RateRepository.FX_URL, new RateTransport.Response(200,
                 "{\"rates\":{\"TRY\":" + usdTry + ",\"EUR\":" + eurRate + "}}"));
         responses.put(RateRepository.GOLD_URL, new RateTransport.Response(200, "{\"price\":2340.0}"));
-        responses.put("https://api.frankfurter.app/" + yesterday + "?from=USD&to=TRY,EUR",
+        responses.put("https://api.frankfurter.dev/v1/" + yesterday + "?from=USD&to=TRY,EUR",
                 new RateTransport.Response(200,
                         "{\"rates\":{\"TRY\":40.80,\"EUR\":" + eurRate + "}}"));
         responses.put(RateRepository.GOLD_HISTORY_URL, new RateTransport.Response(200,
@@ -250,7 +250,7 @@ public class RateRepositoryTest {
                 "{\"rates\":{\"TRY\":" + usdTry + ",\"EUR\":" + eurRate + "}}"));
         responses.put(RateRepository.GOLD_URL, new RateTransport.Response(200,
                 "{\"price\":2340.0}"));
-        responses.put("https://api.frankfurter.app/" + yesterday + "?from=USD&to=TRY,EUR",
+        responses.put("https://api.frankfurter.dev/v1/" + yesterday + "?from=USD&to=TRY,EUR",
                 new RateTransport.Response(200,
                         "{\"rates\":{\"TRY\":40.80,\"EUR\":1.10}}"));
         responses.put(RateRepository.GOLD_HISTORY_URL, new RateTransport.Response(200,
@@ -349,7 +349,7 @@ public class RateRepositoryTest {
                 "{\"rates\":{\"TRY\":" + usdTry + ",\"EUR\":" + eurRate + "}}"));
         responses.put(RateRepository.GOLD_URL, new RateTransport.Response(200,
                 "{\"price\":" + goldUsdPerOunce + "}"));
-        responses.put("https://api.frankfurter.app/" + yesterday + "?from=USD&to=TRY,EUR",
+        responses.put("https://api.frankfurter.dev/v1/" + yesterday + "?from=USD&to=TRY,EUR",
                 new RateTransport.Response(200,
                         "{\"rates\":{\"TRY\":40.80,\"EUR\":" + eurRate + "}}"));
         responses.put(RateRepository.GOLD_HISTORY_URL, new RateTransport.Response(200,
