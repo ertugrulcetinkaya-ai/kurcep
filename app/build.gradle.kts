@@ -20,7 +20,7 @@ android {
 
     defaultConfig {
         applicationId = "com.kurcep.app"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 36
         versionCode = 3
         versionName = "1.3"
@@ -65,7 +65,7 @@ android {
 
 dependencies {
     implementation("androidx.core:core:1.19.1")
-    implementation("androidx.work:work-runtime:2.11.2")
+    implementation("androidx.work:work-runtime:2.12.0")
     testImplementation("junit:junit:4.13.2")
     // android.jar ships org.json stubs that cannot parse; local unit tests need the real library.
     testImplementation("org.json:json:20260814")
